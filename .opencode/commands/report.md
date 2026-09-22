@@ -33,6 +33,9 @@ Before reading findings, validate them:
 If any check fails, stop and report the duplicate IDs, count mismatch, raw runtime bypasses,
 collection failures, or unresolved high-risk surfaces instead of generating a misleading report.
 
+Additionally, before generating the report, run `bash ./scripts/validate_finding.sh <finding.json>`
+on EACH finding in scope. Any finding that fails is removed from the report or explicitly marked UNCONFIRMED.
+
 ## Step 3: Generate Report
 
 Do NOT call the `skill` tool for report-generation. The required report format and methodology

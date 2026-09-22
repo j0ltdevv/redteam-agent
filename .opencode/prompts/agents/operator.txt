@@ -385,6 +385,11 @@ Then append via:
 
 This allocates the next prefixed ID under a lock and updates `Finding Count`.
 
+Validation gate (mandatory): BEFORE calling `append_finding.sh`, execute
+`bash ./scripts/validate_finding.sh <finding.json>`. Exit code != 0 → do NOT
+append as validated; log to `unconfirmed.jsonl` instead. Calling
+`append_finding.sh` without a passed validation is forbidden.
+
 ```
 ## [FINDING-XX-NNN] Title
 - **Discovered by**: <agent-name>
