@@ -198,6 +198,24 @@ else
     ok "secrets dir absent (skipped)"
 fi
 
+# 11. Check cage systemd-run (P4) — cage inactive = WARN seul, jamais FAIL
+echo -n "  Checking cage systemd-run... "
+if [ "${IN_OPENCODE_CAGE:-}" = "1" ]
+then
+    ok "cage systemd-run active"
+else
+    warn "cage non active (execution hors cage, statut honnete)"
+fi
+
+echo -n "  Checking systemd-run... "
+if command -v systemd-run >/dev/null 2>&1
+then
+    ok "systemd-run present (methode P4 disponible)"
+else
+    fail "systemd-run absent (methode P4 non disponible)"
+    ERRORS=$((ERRORS + 1))
+fi
+
 echo ""
 echo "============================================"
 if [ $ERRORS -eq 0 ]

@@ -47,6 +47,7 @@ Date : 2026-09-22 · Périmètre : `~/redteam-agent/` uniquement · Statut globa
 3. **Lazy MCP par phase** : actuellement 11 MCP spawns/session — étendre le principe INDEX aux MCP (disable par phase) si le coût de démarrage gêne.
 4. **Bench copilot v2** sur le mock R4 (même protocole que mcode/OpenCode v1) pour mesurer l'effet des gardes-fous sur le bruit hors doctrine.
 5. ~~Brancher le validate gate dans le pipeline `/engage`~~ → ✅ FAIT (FIX-4 : engage Phase 3/4 + operator + report + copilot, commits `08187c7`/`6ea8534`/`83ddf27`).
+6. **P4 isolation réseau** : statut = « P4 = applicatif fail-closed + cage systemd-run. Kernel nft abandonné (conflit iptables-nft CachyOS + GID user partagé). » Cage active via `opencode-caged` (`.opencode/references/opencode-caged.fish`, à copier dans `~/.config/fish/functions/`), check `verify-tor.sh` section 11.
 
 ## 6. Comment valider (opérateur)
 
