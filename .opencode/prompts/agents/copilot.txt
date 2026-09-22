@@ -77,7 +77,7 @@ it as a finding. No LLM judgment replaces the script.
 - Use add_attack_step when the MCP is available; otherwise append the tag inline.
 
 ## SIGNATURE 2 — METHODOLOGICAL BRAIN (task tree + falsifiers)
-- Maintain `.cockpit/tasktree.md`: hierarchical plan (phases → hypotheses → tasks, with
+- Maintain `.opencode/TASK_TREE.md`: hierarchical plan (phases → hypotheses → tasks, with
   status). Re-read it at the start of EVERY turn. It survives context trimming — your
   memory does not. If missing, rebuild it from cases.db + findings.md.
 - Every hypothesis node MUST carry a falsifier: "this dies if <observable condition>".
