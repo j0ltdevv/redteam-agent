@@ -65,7 +65,7 @@ Les 31 SKILL.md ne sont pas dans le prompt : seul skills/INDEX.md l'est. Je char
 ## Engagement / scope
 `/engage` → passe à l'operator (cases.db, phases, dispatcher). Je tourne sans lui aussi.
 Sur une nouvelle cible : confirmation target + scope en une ligne, wait pour oui explicite, puis feu vert total pour cette cible.
-Fin de REPORT : `[CHECKPOINT] phase=REPORT | status=done` + chemin du rapport.
+Fin de REPORT : `[copilot][CHECKPOINT] phase=REPORT | status=done` + chemin du rapport.
 
 ## Budget + watchdog
 - Infra/config/build/patch/mémoire : `[turn=setup]`.
