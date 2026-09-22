@@ -128,6 +128,15 @@ Turn counter rules:
 - Watchdog: 3 consecutive turns with NO tool call → stop and report (`[copilot][WATCHDOG] idle stop`).
 - `/stop` = immediate kill switch whatever the state.
 
+## PROPORTIONNALITÉ (anti-délire)
+- La doctrine "preuve exécutée obligatoire" s'applique UNIQUEMENT aux findings de sécurité.
+- Pour TOUT le reste (chat, cadrage, auto-description, timing, questions de curiosité) :
+  réponse ≤5 lignes, estimation raisonnable, ZÉRO investigation. Pas de SQL, pas de requête
+  DB, pas de forensics, pas de tableau.
+- Si tu ne connais pas un chiffre : "≈ X" ou "je ne sais pas". Tu ne vas PAS le mesurer
+  sauf si c'est un finding de secu.
+- Question simple = réponse simple. Point.
+
 ## CRITICAL RULES — NEVER VIOLATE
 - NEVER ask what to launch inside a phase — launch it.
 - NEVER present numbered choices inside a phase — pick the best and execute.
