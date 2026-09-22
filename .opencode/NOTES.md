@@ -182,3 +182,15 @@ Résultat brut (stdout) :
 | FIX-4 gate | OK | `08187c7` + `6ea8534` + `83ddf27` | 4 grep non-vides, e2e exit 0 (`proof_hash=7ef92c4e930760ad`) / exit 1 |
 | FIX-5 poc-demo | décision notée, sans suppression | — | §FIX-5 ci-dessus, 0 ref dans docs |
 | FIX-6 preuves | OK | (docs, ce commit) | T10 preuve màj, RAPPORT_V2 §5 recos 1+5 soldées |
+
+## Run 2 — Fermeture OPSEC (P3/P4/P5/P3b) — 2026-09-22
+
+| Fix | Statut | Commit | Preuve |
+|-----|--------|--------|--------|
+| P3 rate 10rps | OK | f1401ad | AVANT KATANA RATE LIMIT 60 en container sh ligne 25 et CONCURRENCY 15 ligne 23 et ROUTE CAPTURE 20 et fuzzer t 50 en fuzzer txt lignes 62 et 106 APRES tout a 10 plus gate opsec check rate ceiling avec refus exit 1 plus check verify opsec rate ceiling en verify tor sh section 9 Tests bash n OK x3 et gate t50 avec exit 1 et t10 avec exit 0 et controle negatif verify exit 1 avec ligne citee |
+| P4 nftables | OK | 90684c6 | 3 fichiers crees nftables opsec conf avec table inet opencode et placeholders a remplacer plus policy accept et drop gid cible et nftables apply sh avec guard root exit 1 et CONF SRC derive de dirname plus README nftables avec statut P4 egal 40 pourcent applicatif et config prete Tests bash n OK et execution sans sudo exit 1 |
+| P5 secrets | OK | 5ad53e0 | Option B retenue avec dotenvx local ecarte car env actif hors sandbox SECRETS md avec noms seuls et 0 valeur plus check section 10 en verify tor sh avec WARN jamais FAIL et valeurs jamais affichees plus chmod 600 sur env et chmod 700 sur dossier config Tests bash n OK et check provoque WARN 6 fichiers exit 0 |
+| P3b tags | OK | 300bf8c | L68 CHECKPOINT devient copilot CHECKPOINT sur 1 ligne et L41 avec declenche conserve car grammaticalement correct avec COD apres donc invariable Tests UTF8 sans BOM et 0 point virgule |
+
+4/4 traités, 4 commits, 0 BLOCKED
+Note typo L41 : original correct conservé sans changement
