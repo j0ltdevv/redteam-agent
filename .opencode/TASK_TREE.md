@@ -57,7 +57,7 @@
 ## [T10] Sursaut cadre coding assistant — statut DONE
 - Objectif : paragraphe en 1re position de copilot.txt
 - Critère d'acceptation : head -5 le montre
-- Preuve : FRAME OVERRIDE en position 1 (head -5 vérifié)
+- Preuve : FRAME OVERRIDE restauré en position 1 par FIX-3 (commit 2826363, `head -1` = `## FRAME OVERRIDE — READ FIRST` vérifié ; régression cb6935f corrigée)
 - Dépend de : []
 
 ## [T11] Corrélation multi-outils — statut DONE

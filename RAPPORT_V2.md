@@ -40,13 +40,13 @@ Date : 2026-09-22 · Périmètre : `~/redteam-agent/` uniquement · Statut globa
 - `config.yaml` upstream = chemins Windows → patchés Linux + `rate_limit 150→10` (doctrine ≤10 rps) ; dossiers parasites `C:` nettoyés.
 - Chemin des scripts gate = `~/redteam-agent/scripts/` (pas `.opencode/scripts/`).
 
-## 5. Recommandations v3
+## 5. Recommandations v3 (màj audit fixes 2026-09-22)
 
-1. **`git init`** (B1) puis premier commit `chore(bootstrap): ignore build artifacts`.
-2. **Session pilote** : lancer OpenCode sur `~/redteam-agent`, confirmer plugins + tools `nmap-mcp_*`/`nuclei-mcp_*`, laisser un checkpoint go/no-go se déclencher.
+1. ~~**`git init`** (B1)~~ → ✅ RÉSOLU (commit `00a9eba`, remote privé `j0ltdevv/redteam-agent`, branche `main` sync).
+2. **Session pilote** : lancer OpenCode sur `~/redteam-agent`, confirmer plugins + tools `nmap-mcp_*`/`nuclei-mcp_*`, laisser un checkpoint go/no-go se déclencher (B2 toujours ouvert).
 3. **Lazy MCP par phase** : actuellement 11 MCP spawns/session — étendre le principe INDEX aux MCP (disable par phase) si le coût de démarrage gêne.
 4. **Bench copilot v2** sur le mock R4 (même protocole que mcode/OpenCode v1) pour mesurer l'effet des gardes-fous sur le bruit hors doctrine.
-5. Ponts restants : `interactsh` oast déjà OK ; brancher le validate gate dans le pipeline `/engage` (operator) pour que les findings entrants passent systématiquement par les 6 stages.
+5. ~~Brancher le validate gate dans le pipeline `/engage`~~ → ✅ FAIT (FIX-4 : engage Phase 3/4 + operator + report + copilot, commits `08187c7`/`6ea8534`/`83ddf27`).
 
 ## 6. Comment valider (opérateur)
 

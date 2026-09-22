@@ -167,3 +167,18 @@ Résultat brut (stdout) :
 - 4d : report.md Step 2 — validate sur CHAQUE finding avant génération, échec = retiré ou UNCONFIRMED.
 - 4e : copilot.txt Qualité — JAMAIS de finding validé sans le script + format sortie + preuve (commande + réponse + hash).
 - 4f e2e : avec preuve → `OK stage=validated ... proof_hash=7ef92c4e930760ad` exit 0 ; sans preuve → `KO stage=analysis` exit 1.
+
+## FIX-5 — _poc-demo/ décision (2026-09-22, sans suppression)
+- `_poc-demo/` : [RT-POC-001] format invalide pour le gate, décision en attente (supprimer OU reformater en FINDING-XX-NNN).
+- Détail : `engagements/_poc-demo/findings.md:3` = `## [RT-POC-001] XSS reflet sur /search`, statut `confirmed` SANS preuve exécutée (payload seul) ; 0 référence dans RAPPORT_V2/NOTES/TASK_TREE/BLOCKERS ; la note elle-même (`findings.md:7`) dit « supprimer avec le dossier _poc-demo ». Dossier conservé en l'état en attendant l'instruction opérateur.
+
+## RÉSUMÉ AUDIT FIXES (2026-09-22)
+
+| Fix | Statut | Commit | Preuve |
+|-----|--------|--------|--------|
+| FIX-1 nmap-mcp | OK (déjà corrigé, 0 modif) | `26859dd` (path pré-existant commité) | `.tools/nmap-mcp-server/dist/index.js` présent, boot `nmap-server/0.1.0` exit 0, session `ses_f352e1f40ffeUlbRivCHiO8PBO` sans erreur MCP |
+| FIX-2 cleanup | OK | `e8d1668` | 4 `.bak` git rm + `*.bak` gitignore, `.playwright-mcp/` rm, 2 logs rm, 2 dirs vides rmdir, NOTES:130-132 nettoyées |
+| FIX-3 --auto/idle | OK | `2826363` | copilot.txt:27 (--auto), :67 (watchdog), :1 (FRAME OVERRIDE) |
+| FIX-4 gate | OK | `08187c7` + `6ea8534` + `83ddf27` | 4 grep non-vides, e2e exit 0 (`proof_hash=7ef92c4e930760ad`) / exit 1 |
+| FIX-5 poc-demo | décision notée, sans suppression | — | §FIX-5 ci-dessus, 0 ref dans docs |
+| FIX-6 preuves | OK | (docs, ce commit) | T10 preuve màj, RAPPORT_V2 §5 recos 1+5 soldées |
