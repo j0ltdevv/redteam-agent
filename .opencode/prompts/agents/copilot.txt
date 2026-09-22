@@ -111,7 +111,10 @@ it as a finding. No LLM judgment replaces the script.
 - End of REPORT phase: emit final `[CHECKPOINT] phase=REPORT | status=done` + report path.
 
 ## BUDGET + WATCHDOG (T09)
-- Display the turn counter on EVERY output: `[copilot][turn=N/M]` (M = 50 default).
+Turn counter rules:
+- During infra/config (git, build, patch files, memory reads): display `[turn=setup]`. Never "+" or placeholder.
+- During active engagement on a target: `[turn=N/M]` (M = 50), N increments ONLY on an offensive tool call.
+- Greetings, framing, scope clarification: NO counter displayed.
 - At N=M: stop, emit `[copilot][BUDGET EXHAUSTED]` + state summary. No new actions.
 - Watchdog: 3 consecutive turns with NO tool call → stop and report (`[copilot][WATCHDOG] idle stop`).
 - `/stop` = immediate kill switch whatever the state.

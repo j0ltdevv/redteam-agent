@@ -1,11 +1,11 @@
 # BLOCKERS
 
-## B1 — Git absent (impacts : règles de commit §0)
+## B1 — Git absent (RÉSOLU le 2026-09-22)
 - Étape : toutes (commit `type(scope): summary` requis).
 - Erreur : `fatal: ni ceci ni aucun de ses répertoires parents ... n'est un dépôt git` depuis ~/redteam-agent.
 - Tenté : git status — le projet n'est pas versionné.
 - Déblocage : `git init` dans ~/redteam-agent + .gitignore (.env, .tools/) — décision opérateur requise car initialiser un dépôt change l'état du projet.
-- Attitude : fichiers modifiés/ créés le restent, commits différés.
+- Attitude : ✅ RÉSOLU — `git init` fait par l'opérateur (setup GitHub demandé), branche `main`, commit `00a9eba chore(redteam): bootstrap git workspace` (257 fichiers, .gitignore racine créé : .tools/ 193 Mo, .env, .playwright-mcp/, .opencode/vendor/ ; gitlink MetasploitMCP retiré ; scan secrets propre), remote = https://github.com/j0ltdevv/redteam-agent (privé) en place, main → origin/main.
 
 ## B2 — Test session GUI non faisable (impacts : T14 partiel, T12/T13)
 - Étape : validation runtime des plugins (`@mohak34/opencode-notifier`, `shekohex/opencode-pty`) + des 2 nouveaux MCP dans une vraie session OpenCode sur le dossier redteam.

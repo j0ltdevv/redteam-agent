@@ -30,7 +30,7 @@ Date : 2026-09-22 · Périmètre : `~/redteam-agent/` uniquement · Statut globa
 
 ## 3. BLOCKED
 
-- **B1 — pas de dépôt git** : `git init` = décision opérateur → **commits impossibles** (règle `type(scope): summary` non applicable tant que B1 tient).
+- **B1 — git** : ✅ RÉSOLU — repo **privé** `github.com/j0ltdevv/redteam-agent`, branche `main` up to date, commit `00a9eba` (bootstrap, 257 fichiers). Les commits `type(scope): summary` sont maintenant possibles.
 - **B2 — test session GUI non faisable ici** : voir `.opencode/BLOCKERS.md` (déblocage : ouvrir une session dans `~/redteam-agent`).
 
 ## 4. Épisodes résolus pendant les builds (leçons conservées)
