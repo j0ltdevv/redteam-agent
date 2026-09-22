@@ -303,11 +303,7 @@ rtcurl_has_flag() {
     local item
     for item in "$@"
     do
-        if [[ "$item" == "$needle" ]]
-        then
-            return 0
-        fi
-        if [[ "$item" == "$needle="* ]]
+        if [[ "$item" == "$needle" || "$item" == "$needle="* ]]
         then
             return 0
         fi
@@ -371,6 +367,16 @@ main() {
         runtime_args+=("$item")
     done < <(rewrite_runtime_args "${args[@]}")
 
+    stealth_args=()
+    if ! rtcurl_has_flag "--connect-timeout" "${args[@]}"
+    then
+        stealth_args+=("--connect-timeout" "${RT_CONNECT_TIMEOUT:-5}")
+    fi
+    if ! rtcurl_has_flag "--max-time" "${args[@]}"
+    then
+        stealth_args+=("--max-time" "${RT_MAX_TIME:-20}")
+    fi
+
     if (( in_scope ))
     then
         build_auth_args
@@ -381,15 +387,6 @@ main() {
             rtcurl_enforce_proxy "$url" "$host" || return 1
         done
         rtcurl_stealth_wait
-        stealth_args=()
-        if ! rtcurl_has_flag "--connect-timeout" "${args[@]}"
-        then
-            stealth_args+=("--connect-timeout" "${RT_CONNECT_TIMEOUT:-5}")
-        fi
-        if ! rtcurl_has_flag "--max-time" "${args[@]}"
-        then
-            stealth_args+=("--max-time" "${RT_MAX_TIME:-20}")
-        fi
         if (( ${#RTCURL_ARGS[@]} > 0 ))
         then
             exec curl "${stealth_args[@]}" "${RTCURL_ARGS[@]}" "${runtime_args[@]}"
@@ -398,15 +395,6 @@ main() {
     fi
 
     rtcurl_stealth_wait
-    stealth_args=()
-    if ! rtcurl_has_flag "--connect-timeout" "${args[@]}"
-    then
-        stealth_args+=("--connect-timeout" "${RT_CONNECT_TIMEOUT:-5}")
-    fi
-    if ! rtcurl_has_flag "--max-time" "${args[@]}"
-    then
-        stealth_args+=("--max-time" "${RT_MAX_TIME:-20}")
-    fi
     exec curl "${stealth_args[@]}" "${runtime_args[@]}"
 }
 

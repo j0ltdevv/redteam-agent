@@ -23,28 +23,6 @@ intel_looks_like_secret() {
     printf "%s" "$candidate" | grep -Eq "AKIA|ghp_|sk-|Bearer|[Aa][Pp][Ii][_-]?[Kk][Ee][Yy]"
 }
 
-intel_guard_public_value() {
-    local candidate="${1:-}"
-    if intel_looks_like_secret "$candidate"
-    then
-        printf "%s\n" "[intel] refused secret pattern in public intel.md value ([REDACTED])" >&2 || true
-        return 1
-    fi
-}
-
-intel_scan_public_file() {
-    local public_file="${1:?public file required}"
-    if [[ ! -f "$public_file" ]]
-    then
-        return 0
-    fi
-    if grep -Eq "AKIA|ghp_|sk-|Bearer|[Aa][Pp][Ii][_-]?[Kk][Ee][Yy]" "$public_file"
-    then
-        printf "%s\n" "[intel] secret pattern found in public file ([REDACTED])" >&2 || true
-        return 1
-    fi
-}
-
 intel_append_public_row() {
     local eng_dir="${1:?engagement dir required}"
     local row_type="${2:?type required}"
@@ -79,25 +57,12 @@ intel_harden_secret_perms() {
 
 intel_fix_runtime_secret_perms() {
     local eng_dir="${1:?engagement dir required}"
-    local secret_path="$eng_dir/intel-secrets.json"
-    if [[ -f "$secret_path" ]]
-    then
-        chmod 600 "$secret_path" || return 1
-    fi
-    local local_env="$eng_dir/.interactsh.env"
-    if [[ -f "$local_env" ]]
-    then
-        chmod 600 "$local_env" || return 1
-    fi
     local repo_root=""
     repo_root="$(git rev-parse --show-toplevel 2>/dev/null || true)" || true
-    if [[ -n "$repo_root" ]]
-    then
-        if [[ -f "$repo_root/.opencode/.interactsh.env" ]]
-        then
-            chmod 600 "$repo_root/.opencode/.interactsh.env" || return 1
-        fi
-    fi
+    intel_harden_secret_perms \
+        "$eng_dir/intel-secrets.json" \
+        "$eng_dir/.interactsh.env" \
+        "${repo_root:+$repo_root/.opencode/.interactsh.env}"
 }
 
 ensure_intel_secret_store() {
@@ -117,6 +82,14 @@ ensure_intel_secret_store() {
 
 truncate_secret_preview() {
     printf "%s\n" "[REDACTED]" || true
+}
+
+_intel_new_staging_file() {
+    mkdir -p "${TMPDIR:-/tmp/opencode}" || return 1
+    local staging=""
+    staging="$(mktemp "${TMPDIR:-/tmp/opencode}/intel-value.XXXXXX")" || return 1
+    chmod 600 "$staging" || return 1
+    printf "%s\n" "$staging"
 }
 
 _intel_commit_secret() {
@@ -179,9 +152,7 @@ upsert_intel_secret() {
     printf "%s\n" "[intel] direct argument deprecated use --stdin or --value-file ([REDACTED])" >&2 || true
     ensure_intel_secret_store "$eng_dir" || return 1
     path="$(intel_secret_file "$eng_dir")" || return 1
-    mkdir -p "${TMPDIR:-/tmp/opencode}" || return 1
-    staging="$(mktemp "${TMPDIR:-/tmp/opencode}/intel-value.XXXXXX")" || return 1
-    chmod 600 "$staging" || return 1
+    staging="$(_intel_new_staging_file)" || return 1
     printf "%s" "$value" > "$staging" || return 1
     _intel_commit_secret "$path" "$staging" "$ref" "$type" "$source" "$notes" || return 1
     intel_fix_runtime_secret_perms "$eng_dir" || true
@@ -197,9 +168,7 @@ upsert_intel_secret_stdin() {
     local staging=""
     ensure_intel_secret_store "$eng_dir" || return 1
     path="$(intel_secret_file "$eng_dir")" || return 1
-    mkdir -p "${TMPDIR:-/tmp/opencode}" || return 1
-    staging="$(mktemp "${TMPDIR:-/tmp/opencode}/intel-value.XXXXXX")" || return 1
-    chmod 600 "$staging" || return 1
+    staging="$(_intel_new_staging_file)" || return 1
     cat > "$staging" || return 1
     _intel_commit_secret "$path" "$staging" "$ref" "$type" "$source" "$notes" || return 1
     intel_fix_runtime_secret_perms "$eng_dir" || true
@@ -221,9 +190,7 @@ upsert_intel_secret_file() {
     fi
     ensure_intel_secret_store "$eng_dir" || return 1
     path="$(intel_secret_file "$eng_dir")" || return 1
-    mkdir -p "${TMPDIR:-/tmp/opencode}" || return 1
-    staging="$(mktemp "${TMPDIR:-/tmp/opencode}/intel-value.XXXXXX")" || return 1
-    chmod 600 "$staging" || return 1
+    staging="$(_intel_new_staging_file)" || return 1
     cat "$secret_src" > "$staging" || return 1
     _intel_commit_secret "$path" "$staging" "$ref" "$type" "$source" "$notes" || return 1
     intel_fix_runtime_secret_perms "$eng_dir" || true

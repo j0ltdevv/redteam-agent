@@ -193,8 +193,9 @@ is_katana_noise_path() {
 # Chaque requete doit appeler rt_stealth_jitter_sleep avant envoi
 # Le jitter aleatoire utilise $RANDOM entre 0 et RT_JITTER_MAX_MS
 # Blending : HTTPS/443 privilegie, User-Agent rotatif via rt_random_user_agent
-# depuis scripts/templates/user-agents.txt, metadonnees nettoyees via
-# rt_strip_payload_metadata, jamais d IP reelle sans proxy via
+# depuis scripts/templates/user-agents.txt, helper opt-in hors hot-path
+# rt_strip_payload_metadata (appel manuel uniquement, jamais auto),
+# jamais d IP reelle sans proxy via
 # rt_require_proxy_or_loopback. Compatible avec scripts/lib/container.sh
 # qui source deja ce fichier sans le modifier.
 RT_MAX_RPS="${RT_MAX_RPS:-10}"
@@ -205,26 +206,16 @@ RT_UA_FILE_FALLBACK="${RT_UA_FILE_FALLBACK:-}"
 
 rt_stealth_max_rps() {
     local raw="${RT_MAX_RPS:-10}"
-    local capped="10"
-    if [[ "$raw" =~ ^[0-9]+$ ]]
-    then
-        capped="$raw"
-    fi
-    if (( capped > 10 ))
-    then
-        capped="10"
-    fi
-    if (( capped < 1 ))
-    then
-        capped="1"
-    fi
-    printf '%s\n' "$capped"
+    [[ "$raw" =~ ^[0-9]+$ ]] || raw="10"
+    (( raw > 10 )) && raw="10" || true
+    (( raw < 1 )) && raw="1" || true
+    printf "%s\n" "$raw"
 }
 
 rt_stealth_base_delay_secs() {
     local rps
     rps="$(rt_stealth_max_rps)"
-    awk -v r="$rps" 'BEGIN { printf "%.3f", 1 / r }' || printf '%s\n' "0.100"
+    awk -v r="$rps" 'BEGIN { printf "%.3f", 1 / r }' || printf "%s\n" "0.100"
 }
 
 rt_stealth_jitter_sleep() {
@@ -248,11 +239,7 @@ rt_random_user_agent() {
     [[ -f "$ua_file" ]] || return 1
     while IFS= read -r line || [[ -n "$line" ]]
     do
-        if [[ "$line" =~ ^[[:space:]]*$ ]]
-        then
-            continue
-        fi
-        if [[ "$line" =~ ^[[:space:]]*# ]]
+        if [[ "$line" =~ ^[[:space:]]*(#|$) ]]
         then
             continue
         fi
@@ -264,7 +251,7 @@ rt_random_user_agent() {
         return 1
     fi
     idx="$(( RANDOM % count ))"
-    printf '%s\n' "${lines[$idx]}"
+    printf "%s\n" "${lines[$idx]}"
 }
 
 rt_strip_payload_metadata() {
@@ -278,12 +265,8 @@ rt_strip_payload_metadata() {
         datestr="@${stamp}"
     fi
     touch -d "$datestr" "$target" || return 1
-    if command -v strip >/dev/null 2>&1
+    if command -v strip >/dev/null 2>&1 && [[ ! "$target" =~ \.(sh|txt|md|json|yaml|yml)$ ]]
     then
-        if [[ "$target" =~ \.(sh|txt|md|json|yaml|yml)$ ]]
-        then
-            return 0
-        fi
         strip "$target" >/dev/null 2>&1 || true
     fi
     return 0
@@ -292,11 +275,7 @@ rt_strip_payload_metadata() {
 rt_require_proxy_or_loopback() {
     local url="${1:-}"
     local hostpart="${2:-}"
-    if [[ -n "${ALL_PROXY:-}" ]] || [[ -n "${all_proxy:-}" ]]
-    then
-        return 0
-    fi
-    if [[ -n "${HTTPS_PROXY:-}" ]] || [[ -n "${https_proxy:-}" ]] || [[ -n "${HTTP_PROXY:-}" ]] || [[ -n "${http_proxy:-}" ]]
+    if [[ -n "${ALL_PROXY:-}" || -n "${all_proxy:-}" || -n "${HTTPS_PROXY:-}" || -n "${https_proxy:-}" || -n "${HTTP_PROXY:-}" || -n "${http_proxy:-}" ]]
     then
         return 0
     fi
@@ -304,10 +283,11 @@ rt_require_proxy_or_loopback() {
     then
         return 0
     fi
-    if [[ "$hostpart" == "localhost" ]] || [[ "$hostpart" == "127.0.0.1" ]] || [[ "$hostpart" == "host.docker.internal" ]]
-    then
-        return 0
-    fi
+    case "$hostpart" in
+        localhost|127.0.0.1|host.docker.internal)
+            return 0
+            ;;
+    esac
     if [[ "$url" == *"://localhost"* ]] || [[ "$url" == *"://127.0.0.1"* ]] || [[ "$url" == *"://host.docker.internal"* ]]
     then
         return 0

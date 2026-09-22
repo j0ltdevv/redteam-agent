@@ -116,10 +116,11 @@ then
     fail "cannot create stub dir for fail-closed check"
     ERRORS=$((ERRORS + 1))
 else
-    printf '#!/usr/bin/env bash\nexit 0\n' > "$STUB_DIR/docker" || echo ""
-    printf '#!/usr/bin/env bash\nexit 0\n' > "$STUB_DIR/ss" || echo ""
-    chmod +x "$STUB_DIR/docker" || echo ""
-    chmod +x "$STUB_DIR/ss" || echo ""
+    for stub in docker ss
+    do
+        printf "#!/usr/bin/env bash\nexit 0\n" > "$STUB_DIR/$stub" || echo ""
+        chmod +x "$STUB_DIR/$stub" || echo ""
+    done
     if PATH="$STUB_DIR:/usr/bin:/bin" "$WRAP_SCRIPT" "true" 2>/dev/null
     then
         fail "tor-wrap.sh is fail-open (ran without proxy)"

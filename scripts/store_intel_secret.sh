@@ -26,8 +26,7 @@ MODE="${4:-}"
 [ -n "$TYPE" ] || usage
 [ -n "$MODE" ] || usage
 
-VALUE_MODE="direct"
-VALUE=""
+VALUE_MODE=""
 VALUE_FILE=""
 SOURCE_NAME=""
 NOTES=""
@@ -61,8 +60,6 @@ then
 elif [[ "$VALUE_MODE" == "file" ]]
 then
     upsert_intel_secret_file "$ENG_DIR" "$REF" "$TYPE" "$VALUE_FILE" "$SOURCE_NAME" "$NOTES" || exit 1
-else
-    upsert_intel_secret "$ENG_DIR" "$REF" "$TYPE" "$VALUE" "$SOURCE_NAME" "$NOTES" || exit 1
 fi
 
 intel_fix_runtime_secret_perms "$ENG_DIR" || true
