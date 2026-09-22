@@ -59,7 +59,7 @@ that file with ffuf. If a required corpus is not already inside `/workspace` or
    status
    users
    EOF
-   ffuf -u <target>/FUZZ -w "$DIR/scans/path-wordlist.txt" -fc 404 -t 50 -o results.json -of json
+   ffuf -u <target>/FUZZ -w "$DIR/scans/path-wordlist.txt" -fc 404 -t 10 -o results.json -of json
    ```
    Extend the workspace-local wordlist from observed links/routes only.
    Follow-up: -e php,txt,bak,old,conf,html,js,json,xml,zip; recursive one level at a time.
@@ -103,7 +103,7 @@ that file with ffuf. If a required corpus is not already inside `/workspace` or
 === FILTERING & SPEED ===
 
 Filtering: -fc 404, -fs <size>, -fw <words>, -fl <lines>. Combine when needed.
-Threading: -t 50 default, -t 100 fast, -t 10 if rate-limited. Reduce on connection errors.
+Threading: -t 10 default (doctrine ≤10 rps ceiling — never exceed -t 10). Reduce on connection errors.
 Timeout: -timeout 10. Always use -o <file>.json -of json.
 
 === OUTPUT FORMAT ===

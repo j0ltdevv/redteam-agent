@@ -162,6 +162,24 @@ else
     fi
 fi
 
+# 9. Check rate ceiling doctrine ≤10 rps (no -t/--rate/RATE_LIMIT above 10 in scripts/)
+echo -n "  Checking rate ceiling ≤10 rps... "
+SCRIPT_LIB_DIR="$SCRIPT_DIR/lib/container.sh"
+if [ -f "$SCRIPT_LIB_DIR" ]
+then
+    # shellcheck source=/dev/null
+    . "$SCRIPT_LIB_DIR" 2>/dev/null || true
+    if verify_opsec_rate_ceiling "$SCRIPT_DIR" 2>/dev/null
+    then
+        ok "rate ceiling ≤10 rps respected in scripts/"
+    else
+        fail "rate >10 détecté dans scripts/ (doctrine ≤10 rps)"
+        ERRORS=$((ERRORS + 1))
+    fi
+else
+    warn "container.sh absent, rate ceiling check skipped"
+fi
+
 echo ""
 echo "============================================"
 if [ $ERRORS -eq 0 ]

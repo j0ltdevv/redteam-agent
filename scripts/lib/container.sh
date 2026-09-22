@@ -20,9 +20,9 @@ KATANA_TIMEOUT_SECONDS="${KATANA_TIMEOUT_SECONDS:-20}"
 KATANA_TIME_STABLE_SECONDS="${KATANA_TIME_STABLE_SECONDS:-5}"
 KATANA_RETRY_COUNT="${KATANA_RETRY_COUNT:-3}"
 KATANA_MAX_FAILURE_COUNT="${KATANA_MAX_FAILURE_COUNT:-20}"
-KATANA_CONCURRENCY="${KATANA_CONCURRENCY:-15}"
+KATANA_CONCURRENCY="${KATANA_CONCURRENCY:-10}"
 KATANA_PARALLELISM="${KATANA_PARALLELISM:-4}"
-KATANA_RATE_LIMIT="${KATANA_RATE_LIMIT:-60}"
+KATANA_RATE_LIMIT="${KATANA_RATE_LIMIT:-10}"
 KATANA_STRATEGY="${KATANA_STRATEGY:-breadth-first}"
 KATANA_ENABLE_JSLUICE="${KATANA_ENABLE_JSLUICE:-0}"
 KATANA_ENABLE_PATH_CLIMB="${KATANA_ENABLE_PATH_CLIMB:-0}"
@@ -313,11 +313,86 @@ _stop_local_process() {
     stop_managed_process "$pid_dir" "$name" "$expected_command"
 }
 
+# OPsec rate ceiling (doctrine ≤10 rps): refuse any tool invocation carrying a
+# thread/rate value above 10. Exact 10 (or below) stays allowed.
+# Usage: opsec_check_rate_ceiling <tool> [args...]
+opsec_check_rate_ceiling() {
+    local prev=""
+    local arg=""
+    local val=""
+    for arg in "$@"; do
+        val=""
+        if [[ "$prev" == "-t" || "$prev" == "--rate" || "$prev" == "-rl" || "$prev" == "--rate-limit" ]]; then
+            if [[ "$arg" =~ ^[0-9]+$ ]]; then
+                val="$arg"
+            fi
+        fi
+        if [[ -z "$val" ]]; then
+            if [[ "$arg" =~ ^-t([0-9]+)$ ]]; then
+                val="${BASH_REMATCH[1]}"
+            elif [[ "$arg" =~ ^--rate=([0-9]+)$ ]]; then
+                val="${BASH_REMATCH[1]}"
+            elif [[ "$arg" =~ ^-rl([0-9]+)$ ]]; then
+                val="${BASH_REMATCH[1]}"
+            elif [[ "$arg" =~ ^RATE_LIMIT=([0-9]+)$ ]]; then
+                val="${BASH_REMATCH[1]}"
+            elif [[ "$arg" =~ ^KATANA_RATE_LIMIT=([0-9]+)$ ]]; then
+                val="${BASH_REMATCH[1]}"
+            fi
+        fi
+        if [[ -n "$val" ]]; then
+            if [[ "$val" =~ ^[0-9]+$ ]] && [ "$val" -gt 10 ]; then
+                echo "[OPsec] rate >10 détecté, refusé par doctrine ≤10 rps" >&2
+                return 1
+            fi
+        fi
+        if [[ "$arg" == "--rate" ]]; then
+            prev="--rate"
+        elif [[ "$arg" == "-t" ]]; then
+            prev="-t"
+        elif [[ "$arg" == "-rl" ]]; then
+            prev="-rl"
+        elif [[ "$arg" == "--rate-limit" ]]; then
+            prev="--rate-limit"
+        else
+            prev="$arg"
+        fi
+    done
+    return 0
+}
+
+# Scan scripts/ for hardcoded thread/rate values above the ≤10 rps ceiling.
+# Usage: verify_opsec_rate_ceiling [scripts_dir]
+verify_opsec_rate_ceiling() {
+    local scan_dir="${1:-}"
+    if [[ -z "$scan_dir" ]]; then
+        if [[ -n "${CONTAINER_LIB_DIR:-}" ]]; then
+            scan_dir="$(cd "$CONTAINER_LIB_DIR/.." && pwd)"
+        else
+            scan_dir="scripts"
+        fi
+    fi
+    local hits=""
+    local filtered=""
+    hits="$(grep -rEn -- "-t ?([1-9][0-9]|[0-9]{3,})|RATE_LIMIT=[1-9][0-9]|--rate[ =][1-9][0-9]|-rl ?[1-9][0-9]" "$scan_dir" 2>/dev/null || true)"
+    if [[ -n "$hits" ]]; then
+        filtered="$(printf '%s\n' "$hits" | grep -vE -- "-t ?10([^0-9]|$)|RATE_LIMIT=10([^0-9]|$)|--rate[ =]10([^0-9]|$)|-rl ?10([^0-9]|$)" || true)"
+        filtered="$(printf '%s\n' "$filtered" | grep -E -- "-t ?(1[1-9]|[2-9][0-9]|[0-9]{3,})|RATE_LIMIT=(1[1-9]|[2-9][0-9]|[0-9]{3,})|--rate[ =](1[1-9]|[2-9][0-9]|[0-9]{3,})|-rl ?(1[1-9]|[2-9][0-9]|[0-9]{3,})" || true)"
+    fi
+    if [[ -n "$filtered" ]]; then
+        echo "[OPsec] rate >10 détecté dans $scan_dir :" >&2
+        echo "$filtered" >&2
+        return 1
+    fi
+    return 0
+}
+
 # Run a one-shot tool in the kali-redteam container
 # Usage: run_tool <tool> [args...]
 # Requires: ENGAGEMENT_DIR env var set
 run_tool() {
     local tool="$1"; shift
+    opsec_check_rate_ceiling "$tool" "$@" || return 1
     _resolve_engagement_dir || return 1
     local runtime_args=()
     while IFS= read -r -d '' item; do
@@ -410,6 +485,15 @@ stop_proxy() {
 # Usage: start_katana <target_url> [extra_katana_args...]
 start_katana() {
     local target="$1"; shift
+    opsec_check_rate_ceiling "katana" "$@" || return 1
+    if [[ "$KATANA_RATE_LIMIT" =~ ^[0-9]+$ ]] && [ "$KATANA_RATE_LIMIT" -gt 10 ]; then
+        echo "[OPsec] KATANA_RATE_LIMIT=$KATANA_RATE_LIMIT plafonné à 10 par doctrine ≤10 rps" >&2
+        KATANA_RATE_LIMIT="10"
+    fi
+    if [[ "$KATANA_CONCURRENCY" =~ ^[0-9]+$ ]] && [ "$KATANA_CONCURRENCY" -gt 10 ]; then
+        echo "[OPsec] KATANA_CONCURRENCY=$KATANA_CONCURRENCY plafonné à 10 par doctrine ≤10 rps" >&2
+        KATANA_CONCURRENCY="10"
+    fi
     _resolve_engagement_dir || return 1
     local runtime_target
     runtime_target="$(_rewrite_runtime_target_arg "$target")"
