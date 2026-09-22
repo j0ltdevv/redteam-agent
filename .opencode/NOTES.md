@@ -127,3 +127,17 @@
 3. instructions = [.opencode/instructions/INSTRUCTIONS.md, skills/INDEX.md, references/INDEX.md].
 4. copilot.txt : CHECKPOINT ×3. 5. BUDGET EXHAUSTED / turn=N/M ×2.
 - Non testable ici : session GUI complète (lancement réel) → compat v2 des plugins notifier/pty = UNKNOWN (B2). Scripts gate/correlate vivent dans ~/redteam-agent/scripts/ (pas .opencode/scripts — chemin corrigé pendant le test).
+21:1. Re-read MEMORY_DAG.md AND .opencode/TASK_TREE.md UNLESS: (a) a tool call occurred
+83:  status). Re-read it (conditional: only if a tool call occurred the previous turn, context
+116:## IDLE STATE — aucun target
+
+## Test "hey" — état idle (F4 proof)
+Commande : `cd ~/redteam-agent && opencode run --standalone --agent copilot --format json "hey"`
+Session : `ses_f35489a33ffeU0ITnVaNBsW6vR` (copilot, MiMo v2.6 flash).
+Résultat brut (stdout) :
+{"type":"step_start","sessionID":"ses_f35489a33ffeU0ITnVaNBsW6vR","part":{"messageID":"msg_0cab773290019CSezvehDtQjq9","type":"step-start"}}
+{"type":"tool_use","sessionID":"ses_f35489a33ffeU0ITnVaNBsW6vR","part":{"partID":"prt_0cab78511001c5w9Q0XIFKi83s","type":"tool","tool":"compress"}}
+{"type":"step_finish","sessionID":"ses_f35489a33ffeU0ITnVaNBsW6vR","part":{"messageID":"msg_0cab773290019CSezvehDtQjq9","type":"step-finish","reason":"tool-calls","tokens":{"input":16051,"output":193,"reasoning":7}}}
+{"type":"step_start","sessionID":"ses_f35489a33ffeU0ITnVaNBsW6vR","part":{"messageID":"msg_0cab7907f0016g8Qx30nmz2Ndw","type":"step-start"}}
+{"type":"text","sessionID":"ses_f35489a33ffeU0ITnVaNBsW6vR","part":{"messageID":"msg_0cab7907f0016g8Qx30nmz2Ndw","type":"text","text":"[copilot] prêt. En attente de target + scope."}}
+→ **PAS de `[turn=...]`**, ZÉRO lecture de fichier, ZÉRO tool call offensif, réponse 1 ligne. ✅ F4 validé.
