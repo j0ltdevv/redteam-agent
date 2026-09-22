@@ -1,0 +1,412 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "nvidia/nemotron-3-super-120b-a12b",
+  "small_model": "nvidia/gemma-4-31b-it",
+  "provider": {
+    "nvidia": {
+      "models": {
+        "nemotron-3-super-120b-a12b": {
+          "name": "Nemotron 3 Super 120B",
+          "limit": {
+            "context": 1000000,
+            "output": 32000
+          },
+          "tools": true
+        },
+        "nemotron-3.5-lightning-30b-a3b": {
+          "name": "Nemotron 3.5 Lightning 30B",
+          "limit": {
+            "context": 256000,
+            "output": 32000
+          },
+          "tools": true
+        },
+        "nemotron-3-ultra-550b-a55b": {
+          "name": "Nemotron 3 Ultra 550B",
+          "limit": {
+            "context": 1000000,
+            "output": 32000
+          },
+          "tools": true
+        },
+        "gemma-4-31b-it": {
+          "name": "Gemma 4 31B",
+          "limit": {
+            "context": 128000,
+            "output": 16000
+          },
+          "tools": true
+        }
+      }
+    }
+  },
+  "default_agent": "copilot",
+  "instructions": [
+    ".opencode/instructions/INSTRUCTIONS.md",
+    "skills/web-recon/SKILL.md",
+    "skills/port-scanning/SKILL.md",
+    "skills/directory-fuzzing/SKILL.md",
+    "skills/parameter-fuzzing/SKILL.md",
+    "skills/sqli-testing/SKILL.md",
+    "skills/xss-testing/SKILL.md",
+    "skills/auth-bypass/SKILL.md",
+    "skills/ssrf-testing/SKILL.md",
+    "skills/file-inclusion/SKILL.md",
+    "skills/report-generation/SKILL.md",
+    "skills/source-analysis/SKILL.md",
+    "skills/command-injection/SKILL.md",
+    "skills/ssti-testing/SKILL.md",
+    "skills/idor-testing/SKILL.md",
+    "skills/csrf-testing/SKILL.md",
+    "skills/xxe-testing/SKILL.md",
+    "skills/deserialization-testing/SKILL.md",
+    "skills/jwt-testing/SKILL.md",
+    "skills/websocket-testing/SKILL.md",
+    "skills/graphql-testing/SKILL.md",
+    "skills/file-upload-testing/SKILL.md",
+    "skills/cors-testing/SKILL.md",
+    "skills/request-smuggling/SKILL.md",
+    "skills/race-condition-testing/SKILL.md",
+    "skills/info-disclosure-testing/SKILL.md",
+    "skills/business-logic-testing/SKILL.md",
+    "skills/subdomain-enumeration/SKILL.md",
+    "skills/user-enumeration/SKILL.md",
+    "skills/open-redirect-testing/SKILL.md",
+    "skills/osint-recon/SKILL.md",
+    "skills/sensitive-data-detection/SKILL.md",
+    "references/INDEX.md"
+  ],
+  "plugin": [
+    "./plugins"
+  ],
+  "mcp": {
+    "metasploit": {
+      "type": "local",
+      "command": [
+        "bash",
+        "scripts/start_metasploit_mcp.sh"
+      ],
+      "enabled": true,
+      "timeout": 10000,
+      "environment": {
+        "MSF_USER": "{env:MSF_USER}",
+        "MSF_PASSWORD": "{env:MSF_PASSWORD}",
+        "MSF_SERVER": "{env:MSF_SERVER}",
+        "MSF_PORT": "{env:MSF_PORT}",
+        "MSF_SSL": "{env:MSF_SSL}",
+        "LOG_LEVEL": "{env:METASPLOIT_MCP_LOG_LEVEL}"
+      }
+    },
+    "hexstrike": {
+      "type": "local",
+      "command": [
+        "/home/j0wlt/.local/bin/uv",
+        "run",
+        "--with", "mcp<2",
+        "--with", "requests",
+        "/home/j0wlt/.hermes/hermes-agent/hexstrike_mcp.py",
+        "--server",
+        "http://127.0.0.1:8888"
+      ],
+      "enabled": true,
+      "timeout": 15000,
+      "environment": {
+        "HEXSTRIKE_LOG_LEVEL": "info"
+      }
+    },
+    // 2026-09-22 : DÉSACTIVÉ (item 1 audit) : le symlink interactsh-client pointe vers
+    // /home/j0wlt/go/bin/interactsh-client qui N'EXISTE PAS + INTERACTSH_SERVER/TOKEN
+    // non définis nulle part -> "mcp connect failed: Connection closed" à chaque session.
+    // Réactiver après : `go install projectdiscovery/interactsh/cmd/interactsh-client@latest`
+    // + définir INTERACTSH_SERVER/INTERACTSH_TOKEN dans ~/.config/opencode/.env
+    // + passer "enabled" à true ci-dessous.
+    "interactsh": {
+      "type": "local",
+      "command": [
+        "bash",
+        "scripts/tor-wrap.sh",
+        "/home/j0wlt/.local/bin/interactsh-mcp"
+      ],
+      "enabled": false,
+      "timeout": 15000,
+      "environment": {
+        "INTERACTSH_SERVER": "{env:INTERACTSH_SERVER}",
+        "INTERACTSH_TOKEN": "{env:INTERACTSH_TOKEN}",
+        "INTERACTSH_LOG_LEVEL": "INFO"
+      }
+    },
+    "sec-toolkit": {
+      "type": "local",
+      "command": [
+        "/home/j0wlt/.local/bin/mcp-security-toolkit"
+      ],
+      "enabled": true,
+      "timeout": 10000
+    },
+    // 2026-09-22 : MCP pentest déplacés du global (décisions 1+2 de l'audit) ->
+    // ils ne spawnent que dans ce projet redteam, plus dans les sessions normales.
+    "obscura": {
+      "type": "local",
+      "command": ["/home/j0wlt/.local/bin/obscura", "mcp"],
+      "enabled": true
+    },
+    // playwright = navigateur headless pour le pentest (pages JS/auth).
+    "playwright": {
+      "type": "local",
+      "command": ["npx", "-y", "@playwright/mcp"],
+      "enabled": true
+    },
+    // wstg-pentest = serveur MCP WSTG (bhavsec/autopentest-ai), testé OK.
+    "wstg-pentest": {
+      "type": "local",
+      "command": ["/home/j0wlt/.local/bin/uv", "--directory", "/home/j0wlt/pentest-lab/autopentest-ai/server", "run", "server.py"],
+      "enabled": true
+    },
+    // osint = corrélation multi-sources (Shodan/Censys/VT/ST/Wayback/crt.sh/BGP/RDAP).
+    "osint": {
+      "type": "local",
+      "command": ["npx", "-y", "osint-mcp-server"],
+      "enabled": true
+    },
+    // caido = proxy-backed MCP (67 tools). Requiert Caido lancé + auth (CAIDO_URL/CAIDO_PAT).
+    "caido": {
+      "type": "local",
+      "command": ["/home/j0wlt/go/bin/caido-mcp-server", "serve"],
+      "enabled": true
+    }
+  },
+  "tools": {
+    "metasploit_*": true,
+    "hexstrike_*": true,
+    "interactsh_*": true,
+    "sec-toolkit_*": true
+  },
+  "agent": {
+    "copilot": {
+      "description": "Manual red team copilot. Conversational step-by-step piloting, waits for orders, no auto-engage.",
+      "mode": "primary",
+      "prompt": "{file:prompts/agents/copilot.txt}",
+      "read": true,
+      "write": true,
+      "edit": true,
+      "bash": true,
+      "glob": true,
+      "grep": true
+    },
+    "operator": {
+      "description": "Lead red team operator. Drives pentest methodology, coordinates the streaming case-pipeline, dispatches subagents.",
+      "mode": "primary",
+      "prompt": "{file:prompts/agents/operator.txt}",
+      "read": true,
+      "write": true,
+      "edit": true,
+      "bash": true,
+      "glob": true,
+      "grep": true
+    },
+    "recon-specialist": {
+      "description": "Passive/active recon: fingerprinting, directory fuzzing, tech stack identification.",
+      "mode": "subagent",
+      "prompt": "{file:prompts/agents/recon-specialist.txt}",
+      "read": true,
+      "write": false,
+      "edit": false,
+      "bash": true,
+      "glob": true,
+      "grep": false
+    },
+    "vulnerability-analyst": {
+      "description": "Analyzes scan results, identifies vulnerability patterns, prioritizes attack paths.",
+      "mode": "subagent",
+      "prompt": "{file:prompts/agents/vulnerability-analyst.txt}",
+      "read": true,
+      "write": false,
+      "edit": false,
+      "bash": true,
+      "glob": true,
+      "grep": true
+    },
+    "exploit-developer": {
+      "description": "Crafts and executes exploits: SQLi payloads, XSS chains, auth bypass techniques.",
+      "mode": "subagent",
+      "prompt": "{file:prompts/agents/exploit-developer.txt}",
+      "read": true,
+      "write": false,
+      "edit": false,
+      "bash": true,
+      "glob": true,
+      "grep": true,
+      "tools": {
+        "metasploit_*": true
+      }
+    },
+    "fuzzer": {
+      "description": "High-volume fuzzing with deep wordlists (500+ payloads). Picks up cases at stage=fuzz_pending escalated by vulnerability-analyst.",
+      "mode": "subagent",
+      "prompt": "{file:prompts/agents/fuzzer.txt}",
+      "read": true,
+      "write": false,
+      "edit": false,
+      "bash": true,
+      "glob": true,
+      "grep": true
+    },
+    "source-analyzer": {
+      "description": "Deep static analysis of HTML/JS/CSS to extract hidden routes, API endpoints, and secrets.",
+      "mode": "subagent",
+      "prompt": "{file:prompts/agents/source-analyzer.txt}",
+      "read": true,
+      "write": false,
+      "edit": false,
+      "bash": true,
+      "glob": true,
+      "grep": true
+    },
+    "report-writer": {
+      "description": "Generates structured engagement report from logs and findings.",
+      "mode": "subagent",
+      "prompt": "{file:prompts/agents/report-writer.txt}",
+      "read": true,
+      "write": true,
+      "edit": true,
+      "bash": false,
+      "glob": true,
+      "grep": true
+    },
+    "osint-analyst": {
+      "description": "OSINT intelligence gathering \u2014 CVE/breach/DNS/social research from intel.md. Dispatched when intel_changed_check.sh writes .osint-respawn-required (idempotent high-water mark on intel.md filled rows).",
+      "mode": "subagent",
+      "prompt": "{file:prompts/agents/osint-analyst.txt}",
+      "read": true,
+      "write": false,
+      "edit": false,
+      "bash": true,
+      "glob": true,
+      "grep": true
+    }
+  },
+  "command": {
+    "engage": {
+      "description": "Start engagement (add --auto for fully autonomous mode)",
+      "template": "{file:commands/engage.md}\n\n$ARGUMENTS",
+      "agent": "operator",
+      "subtask": false
+    },
+    "autoengage": {
+      "description": "Shortcut for /engage --auto",
+      "template": "{file:commands/engage.md}\n\n--auto $ARGUMENTS",
+      "agent": "operator",
+      "subtask": false
+    },
+    "recon": {
+      "description": "Manual override: run reconnaissance phase",
+      "template": "{file:commands/recon.md}\n\n$ARGUMENTS",
+      "agent": "recon-specialist",
+      "subtask": true
+    },
+    "scan": {
+      "description": "Manual override: run active scanning phase",
+      "template": "{file:commands/scan.md}\n\n$ARGUMENTS",
+      "agent": "recon-specialist",
+      "subtask": true
+    },
+    "enumerate": {
+      "description": "Manual override: run enumeration phase",
+      "template": "{file:commands/enumerate.md}\n\n$ARGUMENTS",
+      "agent": "recon-specialist",
+      "subtask": true
+    },
+    "vuln-analyze": {
+      "description": "Manual override: run vulnerability analysis",
+      "template": "{file:commands/vuln-analyze.md}\n\n$ARGUMENTS",
+      "agent": "vulnerability-analyst",
+      "subtask": true
+    },
+    "exploit": {
+      "description": "Manual override: exploit a specific finding",
+      "template": "{file:commands/exploit.md}\n\n$ARGUMENTS",
+      "agent": "exploit-developer",
+      "subtask": true
+    },
+    "pivot": {
+      "description": "Force strategy change based on current findings",
+      "template": "{file:commands/pivot.md}\n\n$ARGUMENTS",
+      "agent": "operator",
+      "subtask": false
+    },
+    "status": {
+      "description": "Show engagement progress and findings summary",
+      "template": "{file:commands/status.md}\n\n$ARGUMENTS",
+      "agent": "operator",
+      "subtask": false
+    },
+    "report": {
+      "description": "Generate final engagement report",
+      "template": "{file:commands/report.md}\n\n$ARGUMENTS",
+      "agent": "report-writer",
+      "subtask": true
+    },
+    "proxy": {
+      "description": "Start or stop the mitmproxy interception proxy",
+      "template": "{file:commands/proxy.md}\n\n$ARGUMENTS",
+      "agent": "operator",
+      "subtask": false
+    },
+    "auth": {
+      "description": "Configure authentication credentials (cookies, headers)",
+      "template": "{file:commands/auth.md}\n\n$ARGUMENTS",
+      "agent": "operator",
+      "subtask": false
+    },
+    "queue": {
+      "description": "Show case queue statistics",
+      "template": "{file:commands/queue.md}\n\n$ARGUMENTS",
+      "agent": "operator",
+      "subtask": false
+    },
+    "stop": {
+      "description": "Stop all background engagement processes",
+      "template": "{file:commands/stop.md}\n\n$ARGUMENTS",
+      "agent": "operator",
+      "subtask": false
+    },
+    "confirm": {
+      "description": "Toggle auto/manual confirmation mode (default: auto)",
+      "template": "{file:commands/confirm.md}\n\n$ARGUMENTS",
+      "agent": "operator",
+      "subtask": false
+    },
+    "resume": {
+      "description": "Resume an interrupted engagement from where it left off",
+      "template": "{file:commands/resume.md}\n\n$ARGUMENTS",
+      "agent": "operator",
+      "subtask": false
+    },
+    "config": {
+      "description": "View or change runtime config (parallel, batch_size)",
+      "template": "{file:commands/config.md}\n\n$ARGUMENTS",
+      "agent": "operator",
+      "subtask": false
+    },
+    "subdomain": {
+      "description": "Enumerate subdomains for a target domain",
+      "template": "TARGET_DOMAIN: $ARGUMENTS\n\n{file:commands/subdomain.md}",
+      "agent": "recon-specialist",
+      "subtask": true
+    },
+    "osint": {
+      "description": "Run OSINT intelligence gathering on current engagement",
+      "template": "{file:commands/osint.md}\n\n$ARGUMENTS",
+      "agent": "osint-analyst",
+      "subtask": true
+    }
+  },
+  "permission": {
+    "Read": "allow",
+    "Glob": "allow",
+    "Grep": "allow",
+    "skill": {
+      "using-superpowers": "deny"
+    }
+  }
+}

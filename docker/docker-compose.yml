@@ -1,0 +1,78 @@
+services:
+  tor-gateway:
+    build:
+      context: ./tor-gateway
+    image: redteam-tor-gateway:latest
+    container_name: redteam-tor-gateway
+    networks:
+      - tor_net
+    restart: unless-stopped
+
+  kali-redteam:
+    build:
+      context: ./kali-redteam
+    image: kali-redteam:latest
+    networks:
+      - tor_net
+    dns:
+      - 127.0.0.1
+    environment:
+      - ALL_PROXY=socks5h://redteam-tor-gateway:9050
+      - HTTP_PROXY=socks5h://redteam-tor-gateway:9050
+      - HTTPS_PROXY=socks5h://redteam-tor-gateway:9050
+      - no_proxy=localhost,127.0.0.1,::1
+      - Tor_SOCKS=redteam-tor-gateway:9050
+
+  mitmproxy:
+    build:
+      context: ..
+      dockerfile: docker/mitmproxy/Dockerfile
+    image: redteam-proxy:latest
+    networks:
+      - tor_net
+    dns:
+      - 127.0.0.1
+    environment:
+      - ALL_PROXY=socks5h://redteam-tor-gateway:9050
+      - HTTP_PROXY=socks5h://redteam-tor-gateway:9050
+      - HTTPS_PROXY=socks5h://redteam-tor-gateway:9050
+      - no_proxy=localhost,127.0.0.1,::1
+    ports:
+      - "127.0.0.1:${MITMPROXY_PORT:-8080}:8080"
+
+  katana:
+    image: projectdiscovery/katana:latest
+    networks:
+      - tor_net
+    dns:
+      - 127.0.0.1
+    environment:
+      - ALL_PROXY=socks5h://redteam-tor-gateway:9050
+      - HTTP_PROXY=socks5h://redteam-tor-gateway:9050
+      - HTTPS_PROXY=socks5h://redteam-tor-gateway:9050
+      - no_proxy=localhost,127.0.0.1,::1
+
+  metasploit:
+    build:
+      context: ./metasploit
+    image: redteam-metasploit:latest
+    networks:
+      - tor_net
+    dns:
+      - 127.0.0.1
+    environment:
+      - ALL_PROXY=socks5h://redteam-tor-gateway:9050
+      - HTTP_PROXY=socks5h://redteam-tor-gateway:9050
+      - HTTPS_PROXY=socks5h://redteam-tor-gateway:9050
+      - no_proxy=localhost,127.0.0.1,::1
+      - MSF_USER=${MSF_USER:-msf}
+      - MSF_PASSWORD=${MSF_PASSWORD:-msf}
+      - MSF_PORT=${MSF_PORT:-55553}
+      - MSF_SSL=${MSF_SSL:-false}
+    ports:
+      - "127.0.0.1:${MSF_PORT:-55553}:55553"
+
+networks:
+  tor_net:
+    driver: bridge
+    name: redteam-tor-net

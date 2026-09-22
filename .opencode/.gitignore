@@ -1,0 +1,9 @@
+node_modules
+
+# Plugin compiled output (keep .ts source, ignore .js artifacts)
+plugins/*.js
+plugins/*.d.ts
+plugins/*.js.map
+
+# interactsh local (T02 v2) — ne jamais commiter
+.interactsh.env

@@ -1,0 +1,6 @@
+{"time":"2026-09-22T16:40:01Z","type":"session.start","agent":"opencode-main","level":"info","summary":"Session Red Team démarrée"}
+{"time":"2026-09-22T16:40:12Z","type":"tool.call","agent":"recon-agent","level":"info","summary":"nmap -sV -T4 cible.lab (10.10.10.0/24)"}
+{"time":"2026-09-22T16:41:03Z","type":"finding","agent":"web-agent","level":"warn","summary":"Finding RT-POC-001 enregistré : XSS reflet /search"}
+{"time":"2026-09-22T16:41:30Z","type":"opsec","agent":"recon-agent","level":"critical","summary":"Scan hors scope détecté : port 3389 sur 10.10.10.99 (hors périmètre validé)"}
+{"time":"2026-09-22T16:42:10Z","type":"tool.call","agent":"pi-worker","level":"info","summary":"pi -p : extraction des sous-domaines via crt.sh"}
+{"time":"2026-09-22T16:43:00Z","type":"turn.end","agent":"opencode-main","level":"info","summary":"Tour terminé — 3 tools, 1 finding"}

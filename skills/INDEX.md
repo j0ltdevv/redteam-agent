@@ -1,0 +1,33 @@
+# Skills INDEX (lazy-load T03) — charger un skill UNIQUEMENT quand sa surface est jouée : lis skills/<nom>/SKILL.md à la demande.
+
+- **auth-bypass** — Test for authentication and authorization flaws including credential attacks, session issues, and access control bypasses
+- **business-logic-testing** — Business logic vulnerability detection — workflow bypass, price manipulation, state abuse, and application-specific flaws
+- **command-injection** — OS command injection detection, exploitation, and filter bypass
+- **cors-testing** — CORS misconfiguration testing for data theft and access control bypass
+- **csrf-testing** — Cross-site request forgery testing for state-changing operations
+- **deserialization-testing** — Insecure deserialization detection and gadget chain exploitation
+- **directory-fuzzing** — Discover hidden directories, files, and endpoints on a web server
+- **file-inclusion** — Detect and exploit local and remote file inclusion vulnerabilities for sensitive data access and code execution
+- **file-upload-testing** — File upload vulnerability testing — webshells, bypass, path traversal
+- **graphql-testing** — GraphQL security testing — introspection, injection, auth bypass, DoS
+- **idor-testing** — Insecure direct object reference testing for broken access control
+- **info-disclosure-testing** — Information disclosure detection — error messages, files, headers, debug endpoints
+- **jwt-testing** — JWT token attack techniques — alg bypass, key confusion, claim tampering
+- **open-redirect-testing** — Test for unvalidated redirects — URL parameters, login flows, OAuth callbacks that redirect to attacker-controlled domains
+- **osint-recon** — Open-source intelligence gathering — CVE lookup, breach search, DNS history, social profiling
+- **parameter-fuzzing** — Discover hidden parameters, test values, and identify input handling anomalies
+- **port-scanning** — Discover open ports, running services, and their versions on a target
+- **race-condition-testing** — Race condition and TOCTOU exploitation — parallel request attacks
+- **report-generation** — Engagement report structure and formatting guidelines
+- **request-smuggling** — HTTP request smuggling via CL.TE/TE.CL desync and cache poisoning
+- **sensitive-data-detection** — Detect PII, credentials, and corporate sensitive data in API responses, source code, files, headers, and database extracts
+- **source-analysis** — Frontend source code analysis for hidden routes, API endpoints, and secrets
+- **sqli-testing** — Detect and exploit SQL injection vulnerabilities in web application parameters
+- **ssrf-testing** — Detect and exploit server-side request forgery to access internal resources and cloud metadata
+- **ssti-testing** — Server-side template injection detection, engine identification, and RCE
+- **subdomain-enumeration** — Subdomain discovery via subfinder, DNS brute-force, and passive sources
+- **user-enumeration** — Discover any interface (HTTP, WebSocket, GraphQL, gRPC, or other) that distinguishes between existing and non-existing users through any observable difference
+- **web-recon** — Enumerate web technologies, headers, endpoints, and metadata from a target
+- **websocket-testing** — WebSocket security testing — injection, auth bypass, hijacking
+- **xss-testing** — Detect and exploit cross-site scripting vulnerabilities in web applications
+- **xxe-testing** — XML external entity injection for file read, SSRF, and DoS

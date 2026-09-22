@@ -1,0 +1,24 @@
+# Artefacts lourds / rebuilds locaux (193 Mo de binaires)
+.tools/
+node_modules/
+
+# Clones tiers rebuildables (embedded repos — jamais versionnés)
+.opencode/vendor/
+
+# Secrets & environnement (jamais versionnés)
+*.env
+.env
+*.pem
+*.key
+
+# Logs
+*.log
+flowdeck.log
+
+# Artefacts navigateur (dumps pages/transitoires)
+.playwright-mcp/
+
+# OS / éditeur
+.DS_Store
+.idea/
+.vscode/
