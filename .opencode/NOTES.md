@@ -127,9 +127,6 @@
 3. instructions = [.opencode/instructions/INSTRUCTIONS.md, skills/INDEX.md, references/INDEX.md].
 4. copilot.txt : CHECKPOINT ×3. 5. BUDGET EXHAUSTED / turn=N/M ×2.
 - Non testable ici : session GUI complète (lancement réel) → compat v2 des plugins notifier/pty = UNKNOWN (B2). Scripts gate/correlate vivent dans ~/redteam-agent/scripts/ (pas .opencode/scripts — chemin corrigé pendant le test).
-21:1. Re-read MEMORY_DAG.md AND .opencode/TASK_TREE.md UNLESS: (a) a tool call occurred
-83:  status). Re-read it (conditional: only if a tool call occurred the previous turn, context
-116:## IDLE STATE — aucun target
 
 ## Test "hey" — état idle (F4 proof)
 Commande : `cd ~/redteam-agent && opencode run --standalone --agent copilot --format json "hey"`
@@ -141,3 +138,18 @@ Résultat brut (stdout) :
 {"type":"step_start","sessionID":"ses_f35489a33ffeU0ITnVaNBsW6vR","part":{"messageID":"msg_0cab7907f0016g8Qx30nmz2Ndw","type":"step-start"}}
 {"type":"text","sessionID":"ses_f35489a33ffeU0ITnVaNBsW6vR","part":{"messageID":"msg_0cab7907f0016g8Qx30nmz2Ndw","type":"text","text":"[copilot] prêt. En attente de target + scope."}}
 → **PAS de `[turn=...]`**, ZÉRO lecture de fichier, ZÉRO tool call offensif, réponse 1 ligne. ✅ F4 validé.
+
+## FIX-1 — nmap-mcp path (audit fix, 2026-09-22)
+- Constat : opencode.json:155 pointe DÉJÀ `/home/j0wlt/redteam-agent/.tools/nmap-mcp-server/dist/index.js` (correct).
+- `ls .tools/nmap-mcp-server/dist/index.js` = présent (5585 o) ; `.tools/nmap-mcp/dist/index.js` = absent ; `.opencode/.tools/...` = absents (le chemin `.opencode/.tools` de la consigne n'existe pas, le bon est `.tools/` racine).
+- Boot stdio : `{"serverInfo":{"name":"nmap-server","version":"0.1.0"}}` + `NMAP server running on stdio`, exit 0.
+- Headless `opencode run --standalone --agent copilot "hey"` : session `ses_f352e1f40ffeUlbRivCHiO8PBO`, texte `[copilot] prêt. En attente de target + scope.`, stderr = 0 erreur MCP.
+- Verdict : déjà corrigé en amont (probablement opérateur) → **aucune modif, aucun commit**. Statut OK.
+
+## FIX-2 — cleanup orphelins (audit fix, 2026-09-22)
+- `.bak` : 4/4 trackés, 0 ref fonctionnelle (seules mentions = NOTES/BLOCKERS historiques) → `git rm` ×4 + `*.bak` + `*.bak-*` au .gitignore racine.
+- `.playwright-mcp/` (racine, 5,7 Mo, 253 fichiers) : 0 ref fonctionnelle (seule mention = BLOCKERS B1) → `rm -rf`. Le chemin `.opencode/.playwright-mcp/` de la consigne n'existe pas.
+- Logs : `.tools/nuclei-mcp/nuclei-mcp.log` (0 ref) + `.opencode/flowdeck.log` (0 ref) → `rm`.
+- `nuclei-templates/` (racine + `.opencode/`) : vides confirmés, vrai = `~/nuclei-templates` → `rmdir` ×2.
+- NOTES.md:130-132 : 3 lignes parasites copier-coller supprimées.
+- `git status` avant commit : `M .gitignore, M NOTES.md, M opencode.json (FIX-1, voir diff), D ×4 .bak`.

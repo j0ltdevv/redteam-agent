@@ -22,3 +22,7 @@ flowdeck.log
 .DS_Store
 .idea/
 .vscode/
+
+# Backups manuels (jamais versionnés — git log fait foi)
+*.bak
+*.bak-*
