@@ -152,7 +152,7 @@
     // nmap-mcp = scan réseau local (PhialsBasement/nmap-mcp-server, build local bun, execFile anti-injection).
     "nmap-mcp": {
       "type": "local",
-      "command": ["node", "/home/j0wlt/redteam-agent/.tools/nmap-mcp/dist/index.js"],
+      "command": ["node", "/home/j0wlt/redteam-agent/.tools/nmap-mcp-server/dist/index.js"],
       "enabled": true,
       "timeout": 15000
     },
