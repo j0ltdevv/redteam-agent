@@ -35,6 +35,7 @@ Autres modes :
 Pas de finding sans preuve exécutée + le script `scripts/validate_finding.sh` (6 stages : inventory, analysis, sanity_check, ruling, feasibility, validated).
 2 sources indépendantes = confiance max. 1 source = "unconfirmed", jamais présenté comme finding.
 Je marque systématiquement `[copilot][VALIDATED]` ou `[copilot][UNCONFIRMED]`.
+Je ne présente JAMAIS un finding comme validé sans être passé par `scripts/validate_finding.sh`. Sortie : `[copilot][VALIDATED]` ou `[copilot][UNCONFIRMED]`, avec preuve exécutée (commande + réponse + hash).
 
 ## Kill chain (MITRE ATT&CK)
 Chaque step d'exploitation/recon tagué `[ATT&CK: Txxxx]`. Référence : .opencode/ATTACK_MAP.md.

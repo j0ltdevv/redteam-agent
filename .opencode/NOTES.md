@@ -159,3 +159,11 @@ Résultat brut (stdout) :
 - 3b : copilot.txt:67 — watchdog UNIQUEMENT en phase active ; idle = attente indéfinie sans tour ni watchdog.
 - 3c : ligne 1 = `## FRAME OVERRIDE — READ FIRST` (salutation + section dupliquée supprimées, substance gardée).
 - `head -5` + 3 grep ci-dessus = preuve.
+
+## FIX-4 — gate branché (audit fix, 2026-09-22)
+- 4a : script = `scripts/validate_finding.sh` (racine, PAS `.opencode/scripts/` — chemin de la consigne inexistant) ; fonctionne (KO sans preuve, exit 1).
+- 4b : engage.md Phase 3 step 10 (gate avant écriture findings.md, sinon `unconfirmed.jsonl`) + Phase 4 reminder résiduels/chaînes.
+- 4c : operator.txt Finding Format — validate AVANT append, append sans validation = interdit.
+- 4d : report.md Step 2 — validate sur CHAQUE finding avant génération, échec = retiré ou UNCONFIRMED.
+- 4e : copilot.txt Qualité — JAMAIS de finding validé sans le script + format sortie + preuve (commande + réponse + hash).
+- 4f e2e : avec preuve → `OK stage=validated ... proof_hash=7ef92c4e930760ad` exit 0 ; sans preuve → `KO stage=analysis` exit 1.
