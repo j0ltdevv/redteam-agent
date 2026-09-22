@@ -5,6 +5,20 @@ AUTH_FILE="${RTCURL_AUTH_FILE:-/engagement/auth.json}"
 SCOPE_FILE="${RTCURL_SCOPE_FILE:-/engagement/scope.json}"
 UA_FILE="${RTCURL_USER_AGENT_FILE:-/engagement/user-agent.txt}"
 HOST_GATEWAY_ALIAS="${HOST_GATEWAY_ALIAS:-host.docker.internal}"
+RTCURL_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)" || RTCURL_LIB_DIR=""
+if [[ -n "${RT_NOISE_LIB:-}" ]] && [[ -f "${RT_NOISE_LIB:-}" ]]
+then
+    # shellcheck source=/dev/null
+    . "${RT_NOISE_LIB:-}" || true
+elif [[ -n "$RTCURL_LIB_DIR" ]] && [[ -f "$RTCURL_LIB_DIR/../lib/noise.sh" ]]
+then
+    # shellcheck source=/dev/null
+    . "$RTCURL_LIB_DIR/../lib/noise.sh" || true
+elif [[ -f "/engagement/lib/noise.sh" ]]
+then
+    # shellcheck source=/dev/null
+    . "/engagement/lib/noise.sh" || true
+fi
 
 debug() {
     if [[ "${RTCURL_DEBUG:-0}" == "1" ]]; then
@@ -262,11 +276,60 @@ build_auth_args() {
     ' "$AUTH_FILE" 2>/dev/null)
 
     if ! (( EXPLICIT_USER_AGENT )) && ! has_explicit_header "user-agent" && [[ -f "$UA_FILE" ]]; then
-        user_agent="$(grep -v '^[[:space:]]*#' "$UA_FILE" | sed '/^[[:space:]]*$/d' | head -n 1)"
+        if declare -F rt_random_user_agent >/dev/null 2>&1
+        then
+            user_agent="$(rt_random_user_agent "$UA_FILE" 2>/dev/null || true)"
+        fi
+        if [[ -z "${user_agent:-}" ]]
+        then
+            user_agent="$(grep -v "^[[:space:]]*#" "$UA_FILE" | sed "/^[[:space:]]*$/d" | shuf -n 1 2>/dev/null || grep -v "^[[:space:]]*#" "$UA_FILE" | sed "/^[[:space:]]*$/d" | head -n 1)"
+        fi
         if [[ -n "$user_agent" ]]; then
             RTCURL_ARGS+=("-H" "User-Agent: ${user_agent}")
         fi
     fi
+}
+
+# Pilier 3 furtivite — plafond effectif ≤10 req/s documente ici
+# Tous les envois passent par rtcurl_stealth_wait qui delegue au
+# rate+jitter centralise rt_stealth_jitter_sleep de noise.sh
+# avec jitter aleatoire $RANDOM. Timeouts furtifs --connect-timeout 5
+# et --max-time 20 ajoutes sauf override explicite. Blending HTTPS/443
+# preserve par rewrite_runtime_args. UA rotatif via rt_random_user_agent.
+# Egress direct refuse sans proxy sauf loopback via rt_require_proxy_or_loopback.
+rtcurl_has_flag() {
+    local needle="$1"
+    shift
+    local item
+    for item in "$@"
+    do
+        if [[ "$item" == "$needle" ]]
+        then
+            return 0
+        fi
+        if [[ "$item" == "$needle="* ]]
+        then
+            return 0
+        fi
+    done
+    return 1
+}
+
+rtcurl_stealth_wait() {
+    if declare -F rt_stealth_jitter_sleep >/dev/null 2>&1
+    then
+        rt_stealth_jitter_sleep || true
+    fi
+}
+
+rtcurl_enforce_proxy() {
+    local u="$1"
+    local h="$2"
+    if declare -F rt_require_proxy_or_loopback >/dev/null 2>&1
+    then
+        rt_require_proxy_or_loopback "$u" "$h" || return 1
+    fi
+    return 0
 }
 
 main() {
@@ -275,6 +338,7 @@ main() {
     local urls=()
     local url host
     local in_scope=1
+    local stealth_args=()
 
     collect_explicit_auth_overrides "${args[@]}"
 
@@ -302,20 +366,48 @@ main() {
         fi
     done
 
-    while IFS= read -r -d '' item; do
+    while IFS= read -r -d '' item
+    do
         runtime_args+=("$item")
     done < <(rewrite_runtime_args "${args[@]}")
 
-    if (( in_scope )); then
+    if (( in_scope ))
+    then
         build_auth_args
         debug "injecting ${#RTCURL_ARGS[@]} auth args for in-scope target(s)"
-        if (( ${#RTCURL_ARGS[@]} > 0 )); then
-            exec curl "${RTCURL_ARGS[@]}" "${runtime_args[@]}"
+        for url in "${urls[@]}"
+        do
+            host="$(extract_host "$url")"
+            rtcurl_enforce_proxy "$url" "$host" || return 1
+        done
+        rtcurl_stealth_wait
+        stealth_args=()
+        if ! rtcurl_has_flag "--connect-timeout" "${args[@]}"
+        then
+            stealth_args+=("--connect-timeout" "${RT_CONNECT_TIMEOUT:-5}")
         fi
-        exec curl "${runtime_args[@]}"
+        if ! rtcurl_has_flag "--max-time" "${args[@]}"
+        then
+            stealth_args+=("--max-time" "${RT_MAX_TIME:-20}")
+        fi
+        if (( ${#RTCURL_ARGS[@]} > 0 ))
+        then
+            exec curl "${stealth_args[@]}" "${RTCURL_ARGS[@]}" "${runtime_args[@]}"
+        fi
+        exec curl "${stealth_args[@]}" "${runtime_args[@]}"
     fi
 
-    exec curl "${runtime_args[@]}"
+    rtcurl_stealth_wait
+    stealth_args=()
+    if ! rtcurl_has_flag "--connect-timeout" "${args[@]}"
+    then
+        stealth_args+=("--connect-timeout" "${RT_CONNECT_TIMEOUT:-5}")
+    fi
+    if ! rtcurl_has_flag "--max-time" "${args[@]}"
+    then
+        stealth_args+=("--max-time" "${RT_MAX_TIME:-20}")
+    fi
+    exec curl "${stealth_args[@]}" "${runtime_args[@]}"
 }
 
 main "$@"
