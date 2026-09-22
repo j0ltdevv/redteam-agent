@@ -180,6 +180,24 @@ else
     warn "container.sh absent, rate ceiling check skipped"
 fi
 
+# 10. Check secrets hygiene (WARN only, never FAIL)
+echo -n "  Checking secrets hygiene... "
+SECRET_CONF_DIR="$HOME/.config/opencode"
+SECRET_HITS=""
+if [ -d "$SECRET_CONF_DIR" ]
+then
+    SECRET_HITS=$(grep -rE -l --exclude-dir="node_modules" --exclude-dir=".git" "[0-9a-f]{64,}" "$SECRET_CONF_DIR" 2>/dev/null || echo "")
+    if [ -z "$SECRET_HITS" ]
+    then
+        ok "no plaintext hex64 token detected"
+    else
+        SECRET_COUNT=$(echo "$SECRET_HITS" | wc -l || echo "?")
+        warn "secret en clair possible (${SECRET_COUNT} fichier(s), valeurs masquees, rotation + chiffrement recommandes)"
+    fi
+else
+    ok "secrets dir absent (skipped)"
+fi
+
 echo ""
 echo "============================================"
 if [ $ERRORS -eq 0 ]
