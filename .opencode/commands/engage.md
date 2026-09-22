@@ -37,7 +37,7 @@ If no target is provided in the arguments, ask the user for one before proceedin
 ## Step 2: Create Engagement Directory and Files
 
 **IMPORTANT: Use bash commands to create all engagement files. Do NOT use the Write tool — it will fail on new files.**
-**IMPORTANT: Before Step 2 completes, do NOT read `scope.json`, `log.md`, `findings.md`, `intel.md`, `auth.json`, or `cases.db` — they do not exist yet.**
+**IMPORTANT: Before Step 2 completes, do NOT read `scope.json`, `log.md`, `findings.md`, `intel.md`, `auth.json`, `graph.json`, or `cases.db` — they do not exist yet.**
 **IMPORTANT: Do NOT look for `engage.md` under `scripts/`. The command definition lives in `.opencode/commands/engage.md`.**
 **IMPORTANT: Do NOT use `python`, `python3`, `node`, or any custom script to create the engagement files. Use the bash block below directly.**
 
@@ -111,6 +111,15 @@ EOF
 
 : > "$DIR/surfaces.jsonl"
 printf "[]\n" > "$DIR/intel-secrets.json"
+
+cat > "$DIR/graph.json" << EOF
+{
+  "updated": "${START_TIME}",
+  "facts": [],
+  "intents": [],
+  "hints": []
+}
+EOF
 
 if [ -f ".redteam-seed/auth.json" ]; then
   cp ".redteam-seed/auth.json" "$DIR/auth.json"

@@ -13,7 +13,7 @@ Banner rule: the ASCII banner / "RedTeam Agent ready" greeting is for an idle in
 
 After `/engage` initialization completes, repeat until all attack paths exhausted, queue work is exhausted, surface coverage is resolved, or user signals stop:
 
-1. **ASSESS STATE** — Read `scope.json` every loop, then inspect only the newest relevant slice of `log.md` / `findings.md` needed for the next decision. Run `./scripts/intel_changed_check.sh "$DIR"` once per loop; if it creates `.osint-respawn-required`, dispatch `osint-analyst` per Intel.md Rules, but respawn work MUST NOT starve the case queue: when `stats-by-stage` still shows active-stage cases and there is no in-flight queue subagent, the same operator turn (or the next advancing action after the respawn task returns) must perform a real stage fetch+task dispatch before doing another respawn-only pass. Check recent `log.md` state before ANY action, but do NOT reload full long artifacts every turn unless you are preparing the final report or deduping a concrete finding.
+1. **ASSESS STATE** — Read `scope.json` every loop, then inspect only the newest relevant slice of `log.md` / `findings.md` needed for the next decision, plus `graph.json` (open intents and the newest hints — they are part of the state every next decision is based on). Run `./scripts/intel_changed_check.sh "$DIR"` once per loop; if it creates `.osint-respawn-required`, dispatch `osint-analyst` per Intel.md Rules, but respawn work MUST NOT starve the case queue: when `stats-by-stage` still shows active-stage cases and there is no in-flight queue subagent, the same operator turn (or the next advancing action after the respawn task returns) must perform a real stage fetch+task dispatch before doing another respawn-only pass. Check recent `log.md` state before ANY action, but do NOT reload full long artifacts every turn unless you are preparing the final report or deduping a concrete finding.
 2. **DECIDE NEXT ACTION** — Prioritize by impact (HIGH first). Skip ahead if obvious vulns found.
 3. **FORMULATE PLAN** — Actions, tools, targets, rationale, best subagent.
 4. **PRESENT OR PROCEED** — INTERACTIVE or `/confirm manual`: use NUMBERED choices (single digits) and wait for input. AUTO-CONFIRM (default): auto-proceed after first approval of the engagement plan (recon + initial fan-out). AUTONOMOUS (`/autoengage` and `/resume`): never wait; announce the next action and continue. In autonomous mode, NEVER emit a standalone status/progress-only text turn while work remains (for example “Continuing...”, “Next I’ll...”, `[operator] Continuing consume_test.`, `[operator] Autoengage started and active.`, or a queue summary by itself). Any non-terminal text must be paired in the SAME assistant turn with at least one real advancing action (task dispatch, dispatcher update, findings/surface write, phase update, coverage check, or completion check). If queue work still remains after any tool call, do NOT emit a wrap-up/status message; immediately make the next advancing tool call instead. If no advancing action is ready, write an explicit stop reason log entry and stop using the stop-reason format below. Autonomous runs must also avoid interactive permission prompts entirely: stay inside `/workspace` inputs and files you create under `$DIR`, do not glob `/`, `/usr/share`, or other external directories, and if a branch would require approval then skip/log it instead of asking.
@@ -35,13 +35,21 @@ After `/engage` initialization completes, repeat until all attack paths exhauste
 
 ## Engagement Initialization
 
-Handled by `/engage` command (`.opencode/commands/engage.md` Steps 1-5). It creates the engagement directory, `scope.json`, `cases.db`, `log.md`, `findings.md`, `intel.md`, `intel-secrets.json`, and `auth.json`.
+Handled by `/engage` command (`.opencode/commands/engage.md` Steps 1-5). It creates the engagement directory, `scope.json`, `cases.db`, `log.md`, `findings.md`, `intel.md`, `intel-secrets.json`, `graph.json`, and `auth.json`.
 
 Rules:
 - Do not delegate `/engage` initialization to the task tool or any general subagent.
 - Before initialization completes, do not read `scope.json`, `log.md`, `findings.md`, `intel.md`, `auth.json`, or `cases.db`.
 - Use the bash block from `.opencode/commands/engage.md` directly. Do not rewrite initialization in `python`, `python3`, `node`, or custom scripts.
 - The core loop starts only after /engage initialization completes successfully.
+
+## Campaign Graph (graph.json)
+
+`graph.json` is the campaign blackboard: three primitives with strict trust levels. **Fact** (`F-nnn`) is a confirmed conclusion — it MUST be backed by evidence already recorded in `findings.md` / `cases.db`; the graph stores the conclusion while findings.md/cases.db store the evidence, so a Fact with no backing finding or case is invalid. **Intent** (`I-nnn`) is a declared, not-yet-executed objective — the intents array is a dispatch-queue complement, and open (unresolved) intents are work the operator still owes the run. **Hint** (`H-nnn`) is human judgment (a hunch, a suggested angle); a Hint NEVER becomes a Fact without an actual execution pass — execution either promotes it or kills it, wording alone never does.
+
+The operator is the SOLE writer of the graph. Subagents never read or write `graph.json`; they report through `findings.md` / `log.md`, and the operator transcribes anything graph-worthy at RECORD FINDINGS (immediately, before the next dispatch). `/engage` seeds an empty graph at initialization and `graph.sh` auto-creates it if missing. All mutations go through `./scripts/graph.sh <engagement_dir> <add|list|resolve>`: `add <fact|intent|hint> <text> [source]` (allocates the next `F-/I-/H-nnn` id and dedupes inside the same primitive array), `list [fact|intent|hint]` (compact id-sorted dump), `resolve <intent_id> [note]` (marks an intent executed/retired; exit 1 on an unknown id or a non-intent id).
+
+Reading `graph.json` is MANDATORY at every ASSESS STATE alongside `scope.json`: open intents plus the newest hints feed DECIDE NEXT ACTION directly, and when stage stats are ambiguous (several active stages, no obvious HIGH-impact item) unresolved intents are the priority dispatch candidates. Dedup rule: when an `add` would repeat an existing entry (same normalized text in the same array), merge into and extend the existing entry instead of creating a duplicate — the graph must never fork two copies of one statement.
 
 ## Subagent Dispatch
 
@@ -442,7 +450,7 @@ OSINT correlation must not become a liveness loop. If `.osint-respawn-required` 
 | Custom scripts/exploits | tools/ |
 | Background PIDs | pids/ |
 
-Root: scope.json, log.md, findings.md, intel.md, intel-secrets.json, report.md, auth.json, cases.db only.
+Root: scope.json, log.md, findings.md, intel.md, intel-secrets.json, graph.json, report.md, auth.json, cases.db only.
 
 ## Skills
 
