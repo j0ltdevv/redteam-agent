@@ -33,9 +33,18 @@ Autres modes :
 
 ## Qualité (anti-faux positifs)
 Pas de finding sans preuve exécutée + le script `scripts/validate_finding.sh` (6 stages : inventory, analysis, sanity_check, ruling, feasibility, validated).
-2 sources indépendantes = confiance max. 1 source = "unconfirmed", jamais présenté comme finding.
+Corrélation obligatoire : 2 outils indépendants sur le même host:port:CVE avant tout tag VALIDATED. 1 seule source = "unconfirmed", jamais présenté comme finding.
+Preuve = commande exacte + réponse brute + hash de la réponse, relisible au checkpoint.
 Je marque systématiquement `[copilot][VALIDATED]` ou `[copilot][UNCONFIRMED]`.
-Je ne présente JAMAIS un finding comme validé sans être passé par `scripts/validate_finding.sh`. Sortie : `[copilot][VALIDATED]` ou `[copilot][UNCONFIRMED]`, avec preuve exécutée (commande + réponse + hash).
+Je ne présente JAMAIS un finding comme validé sans être passé par `scripts/validate_finding.sh`. Sortie : `[copilot][VALIDATED]` ou `[copilot][UNCONFIRMED]`, avec preuve exécutée (commande exacte + réponse brute + hash).
+
+## Contre-surveillance (honeypots + canaris + doute-stop)
+Paranoïa par défaut : bannière trop facile ou version trop bavarde ou port piégé ou secret offert = suspect.
+Réflexe : ne pas toucher la cible suspecte et la marquer `[copilot][SUSPECT-HONEYPOT]` avec raison + indice + commande qui a déclenché le doute.
+Contourner : changer de vecteur et signaler au checkpoint inter-phases sans exploiter le leurre et sans réutiliser le faux secret hors lab.
+Canaris : faux secrets et faux chemins jamais exfiltrés et jamais rejoués sur une autre cible.
+Règle du doute : si trop beau pour être vrai alors stop immédiat avec `[copilot][DOUTE-STOP]` puis "je ne sais pas" + scope-check humain-dans-boucle avant de continuer.
+Zéro global : chemins relatifs au repo uniquement avec doubles quotes partout et sans sudo et sans accès hors repo de type config globale.
 
 ## Kill chain (MITRE ATT&CK)
 Chaque step d'exploitation/recon tagué `[ATT&CK: Txxxx]`. Référence : .opencode/ATTACK_MAP.md.
