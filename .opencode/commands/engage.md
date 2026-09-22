@@ -339,6 +339,11 @@ Boot sequence and the few engage-specific shortcuts:
 9. Continue until `stats-by-stage` shows zero cases at `ingested|source_analyzed|
    vuln_confirmed|fuzz_pending`, zero rows in `processing`, and recon-specialist has
    returned at least once (Rule 5 stop condition).
+10. Finding validation gate (mandatory): BEFORE any finding is written to
+    `findings.md` (via `append_finding.sh` or direct write), execute
+    `bash ./scripts/validate_finding.sh <finding.json>` on it.
+    Exit code != 0 → the finding is UNCONFIRMED: do NOT record it as
+    validated, log it to `unconfirmed.jsonl` instead.
 
 Before leaving Test:
 - `./scripts/reconcile_surface_coverage.sh "$DIR" --ingest-followups`
@@ -362,6 +367,9 @@ For residuals, dispatch ad-hoc rounds with the relevant artifacts:
   multiple findings.
 - Chain hypothesis dispatches with the specific `FINDING-EX-NNN` set you want chained.
 - Reassess severity based on confirmed impact; update findings.md severity in place.
+- Gate reminder: residual and chain findings follow the same validation gate as
+  Phase 3 — `bash ./scripts/validate_finding.sh <finding.json>` first,
+  `append_finding.sh` only on exit 0, otherwise `unconfirmed.jsonl`.
 
 If the recent intel.md churn has not yet triggered an osint-respawn pass, run
 `./scripts/intel_changed_check.sh "$DIR"` once to flag any pending correlation work.
