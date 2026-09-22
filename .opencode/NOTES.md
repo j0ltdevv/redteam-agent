@@ -153,3 +153,9 @@ Résultat brut (stdout) :
 - `nuclei-templates/` (racine + `.opencode/`) : vides confirmés, vrai = `~/nuclei-templates` → `rmdir` ×2.
 - NOTES.md:130-132 : 3 lignes parasites copier-coller supprimées.
 - `git status` avant commit : `M .gitignore, M NOTES.md, M opencode.json (FIX-1, voir diff), D ×4 .bak`.
+
+## FIX-3 — --auto/idle/line 1 (audit fix, 2026-09-22)
+- 3a : copilot.txt:27 — `--auto` supprime les confirmations intra-phase, PAS les checkpoints (go/no-go maintenu).
+- 3b : copilot.txt:67 — watchdog UNIQUEMENT en phase active ; idle = attente indéfinie sans tour ni watchdog.
+- 3c : ligne 1 = `## FRAME OVERRIDE — READ FIRST` (salutation + section dupliquée supprimées, substance gardée).
+- `head -5` + 3 grep ci-dessus = preuve.
