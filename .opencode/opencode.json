@@ -46,7 +46,11 @@
   "instructions": [
     ".opencode/instructions/INSTRUCTIONS.md",
     "skills/INDEX.md",
-    "references/INDEX.md"
+    "references/INDEX.md",
+    // T15 shell-strategy : règles bash non-interactives (pas de -i, sudo -n, BatchMode SSH).
+    // NB : `instructions` est config-level -> s'applique à TOUS les agents du profil redteam,
+    // impossible de le limiter au seul copilot.
+    "https://raw.githubusercontent.com/JRedeker/opencode-shell-strategy/trunk/shell_strategy.md"
   ],
   "plugin": [
     "./plugins",
@@ -146,8 +150,12 @@
     // caido = proxy-backed MCP (67 tools). Requiert Caido lancé + auth (CAIDO_URL/CAIDO_PAT).
     "caido": {
       "type": "local",
-      "command": ["/home/j0wlt/go/bin/caido-mcp-server", "serve"],
-      "enabled": true
+      // 2026-09-22 : URL en FLAG plutôt qu'en environment — l'injection environment
+      // n'atteint pas ce spawn (exit 40ms "caido URL is required" → Connection closed).
+      // Preuve : serve --url ... hors opencode = handshake OK exit=0.
+      "command": ["/home/j0wlt/go/bin/caido-mcp-server", "serve", "--url", "http://127.0.0.1:7000"],
+      "enabled": true,
+      "timeout": 30000
     },
     // nmap-mcp = scan réseau local (PhialsBasement/nmap-mcp-server, build local bun, execFile anti-injection).
     "nmap-mcp": {
@@ -162,13 +170,24 @@
       "command": ["/home/j0wlt/redteam-agent/.tools/nuclei-mcp/nuclei-mcp"],
       "enabled": true,
       "timeout": 15000
+    },
+    // T15 cve-lookup = lookups CVE légers (3 tools : lookup_cve, search_cves, check_product_cves ;
+    // NVD API v2 + FIRST EPSS, clé NVD optionnelle). Source locale .tools + patch pin mcp<2
+    // (mcp 2.x casse Server.list_tools, idem hexstrike). Handshake testé OK 2026-09-22.
+    "cve-lookup": {
+      "type": "local",
+      "command": ["~/.local/bin/cve-lookup-mcp"],
+      "enabled": true,
+      "timeout": 15000
     }
   },
   "tools": {
     "metasploit_*": true,
     "hexstrike_*": true,
     "interactsh_*": true,
-    "sec-toolkit_*": true
+    "sec-toolkit_*": true,
+    // T15 : désactivé par défaut — réactivé uniquement pour l'agent copilot (cf. agent.copilot.tools).
+    "cve-lookup*": false
   },
   "agent": {
     "copilot": {
@@ -180,7 +199,11 @@
       "edit": true,
       "bash": true,
       "glob": true,
-      "grep": true
+      "grep": true,
+      // T15 : seul agent à voir les outils CVE (désactivés au top-level, cf. tools).
+      "tools": {
+        "cve-lookup*": true
+      }
     },
     "operator": {
       "description": "Lead red team operator. Drives pentest methodology, coordinates the streaming case-pipeline, dispatches subagents.",
