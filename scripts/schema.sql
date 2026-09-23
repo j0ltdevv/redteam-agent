@@ -39,10 +39,8 @@ CREATE TABLE IF NOT EXISTS cases (
     assigned_agent TEXT,
     retry_count INTEGER NOT NULL DEFAULT 0,
 
-    -- Pipeline stage (state machine: ingested|source_analyzed|api_tested|
-    -- vuln_confirmed|fuzz_pending|exploited|clean|errored).
-    -- Existing DBs are migrated by dispatcher.sh ensure_cases_column
-    -- ("stage" "TEXT NOT NULL DEFAULT 'ingested'"); fresh DBs get it here.
+    -- Pipeline stage; allowed values in dispatcher.sh _validate_stage.
+    -- Existing DBs backfilled by dispatcher.sh ensure_cases_column.
     stage TEXT NOT NULL DEFAULT 'ingested',
 
     -- Timestamps
@@ -57,6 +55,7 @@ CREATE TABLE IF NOT EXISTS cases (
 );
 
 CREATE INDEX IF NOT EXISTS idx_consume ON cases(status, type);
+-- Covers fetch-by-stage WHERE (stage, status, type) + in-flight guard on assigned_agent.
 CREATE INDEX IF NOT EXISTS idx_stage_consume ON cases(stage, status, type, assigned_agent);
 CREATE INDEX IF NOT EXISTS idx_source ON cases(source);
 CREATE INDEX IF NOT EXISTS idx_created ON cases(created_at);

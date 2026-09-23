@@ -3,8 +3,7 @@
 # Override any value via environment variable.
 
 # --- Consume-test parallelism ---
-# 4 = Rule 1 (source-analyzer + vulnerability-analyst + exploit-developer + fuzzer).
-# consume-test reste sérialisé (cf. parallel_dispatch.sh header ee824b9).
+# 4 = Rule 1 fan-out; consume-test stays serial (see parallel_dispatch.sh).
 REDTEAM_MAX_PARALLEL_BATCHES="${REDTEAM_MAX_PARALLEL_BATCHES:-4}"
 REDTEAM_MAX_SAME_AGENT="${REDTEAM_MAX_SAME_AGENT:-2}"
 REDTEAM_BATCH_SIZE="${REDTEAM_BATCH_SIZE:-5}"
