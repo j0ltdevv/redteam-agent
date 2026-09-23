@@ -68,7 +68,7 @@
         "scripts/start_metasploit_mcp.sh"
       ],
       "enabled": true,
-      "timeout": 10000,
+      "timeout": 30000,
       "environment": {
         "MSF_USER": "{env:MSF_USER}",
         "MSF_PASSWORD": "{env:MSF_PASSWORD}",
@@ -90,7 +90,7 @@
         "http://127.0.0.1:8888"
       ],
       "enabled": true,
-      "timeout": 15000,
+      "timeout": 30000,
       "environment": {
         "HEXSTRIKE_LOG_LEVEL": "info"
       }
@@ -120,7 +120,7 @@
         "/home/j0wlt/.local/bin/mcp-security-toolkit"
       ],
       "enabled": true,
-      "timeout": 10000
+      "timeout": 30000
     },
     // 2026-09-22 : MCP pentest déplacés du global (décisions 1+2 de l'audit) ->
     // ils ne spawnent que dans ce projet redteam, plus dans les sessions normales.
@@ -172,7 +172,7 @@
       "type": "local",
       "command": ["/usr/bin/proxychains4", "-q", "-f", "/home/j0wlt/redteam-agent/scripts/proxychains-redteam.conf", "node", "/home/j0wlt/redteam-agent/.tools/nmap-mcp-server/dist/index.js"],
       "enabled": true,
-      "timeout": 15000
+      "timeout": 30000
     },
     // T16 : Go bypass libc connect() → proxychains inopérant dessus ; env HTTP(S)_PROXY
     // socks5 via tor-socks5-wrap.sh (fail-closed, RT_ALLOW_DIRECT=1 pour opt-out explicite).
@@ -180,7 +180,7 @@
       "type": "local",
       "command": ["/usr/bin/bash", "/home/j0wlt/redteam-agent/scripts/tor-socks5-wrap.sh", "/home/j0wlt/redteam-agent/.tools/nuclei-mcp/nuclei-mcp"],
       "enabled": true,
-      "timeout": 15000
+      "timeout": 30000
     },
     // T15 cve-lookup = lookups CVE légers (3 tools : lookup_cve, search_cves, check_product_cves ;
     // NVD API v2 + FIRST EPSS, clé NVD optionnelle). Source locale .tools + patch pin mcp<2
@@ -190,7 +190,7 @@
       // T16 : NVD/EPSS via tor-gateway (chemin absolu — pas de ~ hors shell).
       "command": ["/usr/bin/proxychains4", "-q", "-f", "/home/j0wlt/redteam-agent/scripts/proxychains-redteam.conf", "/home/j0wlt/.local/bin/cve-lookup-mcp"],
       "enabled": true,
-      "timeout": 15000
+      "timeout": 30000
     }
   },
   "tools": {
