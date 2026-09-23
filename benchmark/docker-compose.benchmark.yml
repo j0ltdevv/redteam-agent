@@ -1,0 +1,26 @@
+# benchmark/docker-compose.benchmark.yml — cibles vulnérables LOCALES, loopback uniquement.
+#
+# OPSEC :
+# - AUCUN port publié (jamais 0.0.0.0, ni même 127.0.0.1) : sur réseau
+#   `internal: true`, le démon ne programme aucun binding hôte (vérifié).
+#   Le harness joint la cible via son IP conteneur, depuis l'hôte uniquement.
+# - Réseau `internal: true` : la cible ne peut initier AUCUNE sortie
+#   (pas d'egress reverse-shell/SSRF/telemetry). Zéro route vers le lab.
+# - Réseau dédié `benchmark_net`, NON attaché à `tor_net` ni au réseau lab.
+# - `restart: "no"` : rien ne redémarre seul.
+# - Cibles autorisées ici = images locales vulnérables consenties (lab).
+#   Ne jamais pointer /engage vers du public, du bounty ou du non-autorisé.
+services:
+  juice-shop:
+    image: bkimminich/juice-shop:latest
+    container_name: benchmark-juice-shop
+    networks:
+      - benchmark_net
+    # Pas de `ports:` : voir commentaire OPSEC en tête de fichier.
+    restart: "no"
+
+networks:
+  benchmark_net:
+    driver: bridge
+    name: benchmark-net
+    internal: true
