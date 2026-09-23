@@ -49,9 +49,65 @@ import os
 import sys
 from pathlib import Path
 
+
+def strip_jsonc_comments(text: str) -> str:
+    """Remove JSONC comments without touching // inside strings."""
+    output = []
+    index = 0
+    in_string = False
+    escaped = False
+
+    while index < len(text):
+        char = text[index]
+        next_char = text[index + 1] if index + 1 < len(text) else ""
+
+        if in_string:
+            output.append(char)
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            index += 1
+            continue
+
+        if char == '"':
+            in_string = True
+            output.append(char)
+            index += 1
+            continue
+
+        if char == "/" and next_char == "/":
+            newline = text.find("\n", index + 2)
+            if newline == -1:
+                break
+            output.append("\n")
+            index = newline + 1
+            continue
+
+        if char == "/" and next_char == "*":
+            end = text.find("*/", index + 2)
+            if end == -1:
+                raise ValueError("unterminated JSONC block comment")
+            output.append("\n")
+            index = end + 2
+            continue
+
+        output.append(char)
+        index += 1
+
+    return "".join(output)
+
+
 path = Path(sys.argv[1])
 if path.exists():
-    payload = json.loads(path.read_text(encoding="utf-8"))
+    raw = path.read_text(encoding="utf-8")
+    try:
+        payload = json.loads(strip_jsonc_comments(raw))
+    except (json.JSONDecodeError, ValueError) as exc:
+        raise SystemExit(f"invalid JSONC configuration: {path}: {exc}") from exc
+
     model = os.environ.get("REDTEAM_OPENCODE_MODEL", "").strip()
     small_model = os.environ.get("REDTEAM_OPENCODE_SMALL_MODEL", "").strip()
     if model:

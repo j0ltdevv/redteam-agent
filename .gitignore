@@ -26,3 +26,7 @@ flowdeck.log
 # Backups manuels (jamais versionnés — git log fait foi)
 *.bak
 *.bak-*
+
+# Python bytecode (jamais versionné)
+__pycache__/
+*.pyc

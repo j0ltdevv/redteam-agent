@@ -7,8 +7,8 @@
 #  3. Construit + démarre le conteneur redteam-tor-gateway
 #  4. Vérifie toutes les images Docker
 #  5. Protège .env (chmod 600)
-#  6. Active le thème redteam dans OpenCode TUI
-#  7. Lance OpenCode dans ~/redteam-agent
+#  6. Lance l’instance OpenCode Desktop isolée via start-redteam-desktop.sh
+#  7. Ouvre le projet ~/redteam-agent dans son userData dédié
 #
 #  Usage:
 #    ./start-redteam.sh          → lance tout
@@ -20,9 +20,6 @@ set -euo pipefail
 
 REDTEAM_DIR="$HOME/redteam-agent"
 DOCKER_DIR="$REDTEAM_DIR/docker"
-OPENCODE_CONFIG="$HOME/.config/opencode"
-TUI_JSON="$OPENCODE_CONFIG/tui.json"
-REDTEAM_THEME="redteam"
 
 # --- Couleurs ----------------------------------------------------------------
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
@@ -174,47 +171,13 @@ check_env() {
   fi
 }
 
-# --- 5. Thème RedTeam --------------------------------------------------------
+# --- Thème RedTeam -----------------------------------------------------------
+# Le thème de l'instance daily ne doit jamais être modifié par ce script.
+# Le launcher dédié passe par le profil XDG isolé ; le thème Desktop sera
+# vérifié séparément, sans supposer que tui.json pilote le renderer Desktop.
 activate_theme() {
   echo -e "\n${BOLD}▸ Thème OpenCode${NC}"
-
-  # Vérifier que le thème existe
-  local theme_file="$OPENCODE_CONFIG/themes/${REDTEAM_THEME}.json"
-  if [ -f "$theme_file" ]; then
-    ok "Thème $REDTEAM_THEME trouvé"
-  else
-    warn "Thème $REDTEAM_THEME non trouvé dans $OPENCODE_CONFIG/themes/"
-    return 0
-  fi
-
-  # Activer dans tui.json
-  if [ -f "$TUI_JSON" ]; then
-    local current_theme
-    current_theme=$(jq -r '.theme // "none"' "$TUI_JSON" 2>/dev/null || echo "none")
-    if [ "$current_theme" = "$REDTEAM_THEME" ]; then
-      ok "Thème $REDTEAM_THEME déjà actif"
-    else
-      # Sauvegarder l'ancien
-      cp "$TUI_JSON" "${TUI_JSON}.bak"
-      # Injecter le thème
-      jq --arg t "$REDTEAM_THEME" '. + {"theme": $t}' "$TUI_JSON" > "${TUI_JSON}.tmp"
-      mv "${TUI_JSON}.tmp" "$TUI_JSON"
-      ok "Thème $REDTEAM_THEME activé (ancien sauvé dans tui.json.bak)"
-    fi
-  else
-    # Créer tui.json avec le thème
-    mkdir -p "$OPENCODE_CONFIG"
-    cat > "$TUI_JSON" << EOJSON
-{
-  "\$schema": "https://opencode.ai/config.json",
-  "theme": "$REDTEAM_THEME",
-  "plugin": [
-    "oh-my-openagent@latest"
-  ]
-}
-EOJSON
-    ok "tui.json créé avec thème $REDTEAM_THEME"
-  fi
+  warn "Le thème TUI daily n'est pas modifié ; l'instance Desktop dédiée conserve son profil isolé"
 }
 
 # --- 6. Réseau ---------------------------------------------------------------
@@ -233,50 +196,13 @@ check_network() {
   fi
 }
 
-# --- 7. Lancer OpenCode Desktop ----------------------------------------------
+# --- 7. Lancer l’instance Desktop isolée ------------------------------------
 launch_opencode() {
   echo -e "\n${BOLD}▸ Lancement${NC}"
-  cd "$REDTEAM_DIR"
-
-  # Exporter les clés du .env vers l'environnement (provider NVIDIA, MCPs {env:...})
-  if [ -f "$REDTEAM_DIR/.env" ]; then
-    set -a
-    # shellcheck disable=SC1091
-    . "$REDTEAM_DIR/.env"
-    set +a
-    info ".env chargé dans l'environnement"
-  fi
-
-  # Trouver le binaire Desktop
-  local desktop_bin=""
-  for candidate in \
-    "$HOME/.opencode-v2/desktop/ai.opencode.desktop" \
-    "$HOME/.opencode-v2/bin/opencode" \
-    "$(command -v opencode-desktop 2>/dev/null)" \
-    "$(command -v opencode 2>/dev/null)"; do
-    if [ -n "$candidate" ] && [ -x "$candidate" ]; then
-      desktop_bin="$candidate"
-      break
-    fi
-  done
-
-  if [[ "$desktop_bin" == *"ai.opencode.desktop"* ]]; then
-    info "Lancement d'OpenCode Desktop..."
-    nohup "$desktop_bin" --workdir="$REDTEAM_DIR" > /dev/null 2>&1 &
-    ok "OpenCode Desktop lancé (PID $!)"
-  elif [ -n "$desktop_bin" ]; then
-    info "Lancement d'OpenCode CLI..."
-    exec "$desktop_bin"
-  else
-    fail "Aucun binaire OpenCode trouvé"
-    exit 1
-  fi
-
-  echo ""
-  echo -e "  ${CYAN}Commandes utiles une fois lancé:${NC}"
-  echo "    /engage http://target:8080   → démarrer un engagement"
-  echo "    /status                       → voir l'état de l'engagement"
-  echo "    /stop                         → arrêter l'engagement"
+  local launcher="$REDTEAM_DIR/start-redteam-desktop.sh"
+  [ -x "$launcher" ] || fail "Launcher dédié introuvable ou non exécutable: $launcher"
+  info "Délégation à l'instance Desktop isolée"
+  exec "$launcher"
 }
 
 # --- stop --------------------------------------------------------------------
@@ -308,11 +234,11 @@ show_status() {
     perms=$(stat -c '%a' "$env_file" 2>/dev/null || stat -f '%Lp' "$env_file" 2>/dev/null)
     [ "$perms" = "600" ] && ok ".env: 600" || warn ".env: $perms (devrait être 600)"
   fi
-  # Thème
-  if [ -f "$TUI_JSON" ]; then
-    local t
-    t=$(jq -r '.theme // "none"' "$TUI_JSON" 2>/dev/null || echo "none")
-    [ "$t" = "$REDTEAM_THEME" ] && ok "Thème: $REDTEAM_THEME" || info "Thème: $t"
+  # Le launcher dédié ne modifie pas la configuration TUI daily.
+  if [ -f "$HOME/.config/opencode-redteam/data/auth.json" ] || [ -L "$HOME/.config/opencode-redteam/data/auth.json" ]; then
+    ok "Authentification: lien daily disponible"
+  else
+    warn "Authentification: lien daily absent"
   fi
 }
 

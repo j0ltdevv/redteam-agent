@@ -1,0 +1,39 @@
+#!/bin/bash
+# opencode-cage-root — helper root pour la cage réseau opencode-caged
+# Usage : opencode-cage-root <denylist-ip> [...] -- <command> [args]
+# Construit : systemd-run --scope -p IPAddressAllow=any -p IPAddressDeny=<each> -- <command> <args>
+# Nécessite CAP_BPF (root) → appelé via sudoers NOPASSWD
+#
+# Logique V4 : IPAddressAllow=any (tout autorisé) + IPAddressDeny=lab (lab bloqué uniquement).
+# La cage protège le LAB contre l'agent, pas l'inverse.
+
+set -euo pipefail
+
+# Séparer les arguments en IPs (avant "--") et commande (après "--")
+ips=()
+cmd=()
+found_sep=0
+for arg in "$@"; do
+    if [ "$arg" = "--" ]; then
+        found_sep=1
+        continue
+    fi
+    if [ $found_sep -eq 0 ]; then
+        ips+=("$arg")
+    else
+        cmd+=("$arg")
+    fi
+done
+
+if [ ${#cmd[@]} -eq 0 ]; then
+    echo "opencode-cage-root: aucune commande fournie après '--'" >&2
+    exit 2
+fi
+
+# Allow everything, deny lab destinations
+FLAGS="-p IPAddressAllow=any"
+for ip in "${ips[@]}"; do
+    FLAGS="$FLAGS -p IPAddressDeny=$ip"
+done
+
+exec /usr/bin/systemd-run --scope --quiet $FLAGS -- "${cmd[@]}"

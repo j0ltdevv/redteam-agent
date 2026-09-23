@@ -43,12 +43,14 @@ COPY --from=katana-bin /usr/local/bin/katana /usr/local/bin/katana
 COPY . /src
 WORKDIR /src
 
-RUN ./install.sh opencode /opt/redteam-agent
+# Keep the runtime template in the path expected by entrypoint.sh. The
+# repository does not contain the historical install.sh helper.
+RUN mkdir -p /opt/redteam-agent && cp -a /src/. /opt/redteam-agent/
 
 RUN ln -sf /usr/share/wordlists /wordlists && \
     ln -sf /usr/share/seclists /seclists
 
-COPY agent/docker/redteam-allinone/entrypoint.sh /usr/local/bin/redteam-entrypoint
+COPY docker/redteam-allinone/entrypoint.sh /usr/local/bin/redteam-entrypoint
 RUN chmod +x /usr/local/bin/redteam-entrypoint
 
 WORKDIR /workspace

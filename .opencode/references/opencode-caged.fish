@@ -28,27 +28,26 @@ function opencode-caged --description "OpenCode avec cage réseau (fail-closed, 
         return 1
     end
 
-    # --- Endpoint de vérification d'IP : seule destination internet autorisée en plus du lab ---
-    set -l check_addrs (getent ahostsv4 am.i.mullvad.net 2>/dev/null | string match -ar '[0-9]{1,3}(?:\.[0-9]{1,3}){3}' | sort -u)
-    if test (count $check_addrs) -eq 0
-        echo "[opsec] WARN : résolution de am.i.mullvad.net échouée — vérification d'IP impossible depuis la cage" >&2
+    # --- V4 : cage root via helper sudoers (CAP_BPF) ---
+    # La cage bloque les cibles LAB uniquement (localhost + réseaux lab).
+    # Tout le reste (web, CTF, LLM cloud) est AUTORISÉ → l'agent reste opérationnel.
+    # La cage protège le LAB contre l'agent, pas l'inverse.
+    set -l helper_ok 0
+    if command -v sudo >/dev/null 2>&1; and test -x /usr/local/bin/opencode-cage-root
+        if sudo -n true 2>/dev/null
+            set -l helper_ok 1
+        end
     end
-
-    # --- systemd --user ignore IPAddress* (manager non-root, sans CAP_BPF) : warn ---
-    set -l mgr_pid (pgrep -u (id -u) -x systemd | head -n 1)
-    if test -n "$mgr_pid"; and test (ps -o uid= -p $mgr_pid | string trim) != 0
-        echo "[opsec] WARN : systemd --user n'applique PAS IPAddress* (manager non-root) — filtre réseau inerte, voir references/README-anonymat.md" >&2
+    if test $helper_ok -eq 0
+        echo "[opsec] FAIL : helper root /usr/local/bin/opencode-cage-root non configuré (sudoers manquant)" >&2
+        echo "[opsec] Installe : sudo cp ~/redteam-agent/.opencode/references/opencode-cage-root /usr/local/bin/ && sudo chmod +x" >&2
+        echo "[opsec] Puis : sudo cp ~/redteam-agent/.opencode/references/sudoers-opencode-cage /etc/sudoers.d/opencode-cage" >&2
+        return 1
     end
 
     set -lx IN_OPENCODE_CAGE 1
-    set -l sdargs --user --scope --quiet \
-        -p IPAddressDeny=any \
-        -p IPAddressAllow=127.0.0.0/8 \
-        -p IPAddressAllow=192.168.56.0/24 \
-        -p IPAddressAllow=10.0.0.0/8 \
-        -p IPAddressAllow=172.21.0.0/16
-    for a in $vpn_addrs $check_addrs
-        set -a sdargs "-p" "IPAddressAllow=$a"
-    end
-    systemd-run $sdargs opencode $argv
+    # Denylist = lab uniquement (tout le web/CTF/LLM autorisé)
+    # Attention : 127/8 bloque aussi le localhost (LLM local si présent)
+    set -l denylist 127.0.0.0/8 192.168.56.0/24 10.0.0.0/8 172.21.0.0/16
+    sudo /usr/local/bin/opencode-cage-root $denylist -- opencode $argv
 end

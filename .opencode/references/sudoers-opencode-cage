@@ -1,0 +1,8 @@
+# /etc/sudoers.d/opencode-cage
+# Permet à l'agent OpenCode d'exécuter la cage réseau en root (CAP_BPF)
+# sans mot de passe. Nécessaire car systemd --user n'a pas CAP_BPF
+# (IPAddressDeny/Allow n'est pas appliqué en --user).
+#
+# Le helper /usr/local/bin/opencode-cage-root construit la commande
+# systemd-run --scope complète et l'exécute avec les droits root.
+j0wlt ALL=(root) NOPASSWD: /usr/local/bin/opencode-cage-root *
