@@ -124,15 +124,20 @@
     },
     // 2026-09-22 : MCP pentest déplacés du global (décisions 1+2 de l'audit) ->
     // ils ne spawnent que dans ce projet redteam, plus dans les sessions normales.
+    // T16 OPSEC : --proxy SOCKS5 tor-gateway (testé IsTor:true) = obscura ne
+    // sort plus en clair. Lab direct : lancer obscura à la main SANS --proxy
+    // (le proxy Tor ne route pas le RFC1918 ; SSRF privé bloqué par défaut).
     "obscura": {
       "type": "local",
-      "command": ["/home/j0wlt/.local/bin/obscura", "mcp"],
+      "command": ["/home/j0wlt/.local/bin/obscura", "--proxy", "socks5://127.0.0.1:9050", "mcp"],
       "enabled": true
     },
     // playwright = navigateur headless pour le pentest (pages JS/auth).
+    // T16 OPSEC : --proxy-server socks5 tor-gateway + bypass = lab/loopback
+    // reste direct (équivalent localnet de proxychains-redteam.conf).
     "playwright": {
       "type": "local",
-      "command": ["npx", "-y", "@playwright/mcp"],
+      "command": ["npx", "-y", "@playwright/mcp", "--proxy-server", "socks5://127.0.0.1:9050", "--proxy-bypass", "localhost,127.0.0.1,::1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"],
       "enabled": true
     },
     // wstg-pentest = serveur MCP WSTG (bhavsec/autopentest-ai), testé OK.
