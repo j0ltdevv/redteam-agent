@@ -18,13 +18,13 @@
 
 ## Gestes humains (« sudo interdit en agent » — P4)
 
-### 1. ProtonVPN (déjà installé : CLI officiel v1.0.3, `/usr/bin/protonvpn`)
+### 1. Windscribe Free (déjà installé : `/usr/local/bin/windscribe`) — VPN gratuit retenu (10-15 Go/mois, durée illimitée)
 ```fish
-protonvpn signin            # 1ʳᵉ fois seulement
-protonvpn connect           # serveur le plus rapide (PAS de --tor : interdit)
-curl -s https://am.i.mullvad.net/ip   # hors cage → doit afficher l'IP Proton
+windscribe login            # compte gratuit (email = 10 Go, tweet = 15 Go)
+windscribe connect          # serveur le plus rapide (ou -c <pays>)
+curl -s https://am.i.mullvad.net/ip   # hors cage → doit afficher une IP VPN ≠ IP réelle
 ```
-Fail-closed : `opencode-caged` **refuse de démarrer** (return 1) tant qu'aucune iface `proton*|wg*|tun*|mullvad*` n'a d'adresse.
+Fail-closed : `opencode-caged` **refuse de démarrer** (return 1) tant qu'aucune iface `proton*|wg*|tun*|mullvad*|wind*` n'a d'adresse.
 
 ### 2. Drop-in DoT (le DoT est déjà actif via Quad9 auth TLS ; ce drop-in épingle Cloudflare)
 ```fish
@@ -33,7 +33,7 @@ sudo install -m644 ~/redteam-agent/.opencode/references/resolved-anonymat.conf /
 sudo systemctl restart systemd-resolved
 resolvectl status           # vérifier : +DNSOverTLS, DNSSEC=yes/supported
 ```
-Caveats : (a) les DNS **par lien** NM (hotspot `iPhone` sur `wlan0`) persistent — si besoin : `nmcli con modify iPhone ipv4.ignore-auto-dns yes ipv4.dns 1.1.1.1` ; (b) certains outils dépendent du DNS local — ici pas de régression, le DoT était déjà global.
+Caveats : (a) les DNS **par lien** NM (hotspot `iPhone` sur `wlan0`) persistaient — `ipv4.ignore-auto-dns yes` ne suffit pas (ne touche que le DHCP) car `ipv4.dns` était **statique** (`9.9.9.9,149.112.112.112`) ; le vrai fix : `sudo nmcli con modify <profil> ipv4.dns "" ipv6.dns ""` + `sudo nmcli device reapply wlan0`. Juger sur `resolvectl dns` (vide = bon), pas `nmcli device show` ; (b) certains outils dépendent du DNS local — ici pas de régression, le DoT était déjà global.
 
 ### 3. Rendre la cage réelle (au choix, à arbitrer)
 ```fish
@@ -46,9 +46,11 @@ sudo systemd-run --scope -p IPAddressDeny=any -p IPAddressAllow=127.0.0.0/8 curl
 ### 4. ProxyChains
 `proxychains-anonymat.conf` a besoin d'un proxy SOCKS5 **renseigné** dans `[ProxyList]` (Proton n'expose pas de SOCKS en CLI ; liste vide = `no valid proxy found`). Usage : `px <commande>` uniquement — jamais en wrapper global (−30 à −50 %).
 
+**Quota Windscribe** : 10-15 Go/mois — largement suffisant ici car la cage garde le lab en local ; le VPN ne porte que les `curl` de vérification + l'API de l'agent (quelques centaines de Mo par session). Usage mesuré : 0/10 Go après connect/déco.
+
 ## Étape 4 — vérification finale
-- **Hors cage** (VPN up) : `curl -s https://am.i.mullvad.net/ip` → IP Proton ✅
-- **Dans cage, filtre racine actif** : `curl -s https://am.i.mullvad.net/ip` → IP Proton ✅ (l'IP résolue de `am.i.mullvad.net` est ajoutée dynamiquement à l'allowlist) ; `curl -s https://google.com` → échec ✅
+- **Hors cage** (VPN up) : `curl -s https://am.i.mullvad.net/ip` → IP VPN ≠ IP réelle ✅
+- **Dans cage, filtre racine actif** : `curl -s https://am.i.mullvad.net/ip` → IP VPN ≠ IP réelle ✅ (l'IP résolue de `am.i.mullvad.net` est ajoutée dynamiquement à l'allowlist) ; `curl -s https://google.com` → échec ✅
 - **Dans cage, état actuel (`--user`)** : google **peut passer** (fail-open prouvé) ❌
 
 ## Interdits (rappel)

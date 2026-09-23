@@ -5,16 +5,26 @@ function opencode-caged --description "OpenCode avec cage réseau (fail-closed, 
     end
 
     # --- Fail-closed : aucune interface VPN => pas de cage, pas d'OpenCode ---
+    set -l vpn_up 0
     set -l vpn_addrs
     for line in (ip -br addr show)
         set -l ifname (string split -m 1 ' ' -- $line)[1]
-        if string match -qr '^(proton[0-9]*|wg[0-9]+|tun[0-9]+|mullvad-wg|mullvad[0-9]*)$' -- $ifname
+        if string match -qr '^(proton[0-9]*|wg[0-9]+|tun[0-9]+|mullvad-wg|mullvad[0-9]*|wind[0-9]+|windscribe[0-9]*|vpn[0-9]+|wireguard[0-9]*)$' -- $ifname
+            set -l vpn_up 1
             set -a vpn_addrs (string match -ar '[0-9]{1,3}(?:\.[0-9]{1,3}){3}(?:/[0-9]{1,2})?' -- $line)
         end
     end
-    if test (count $vpn_addrs) -eq 0
-        echo "[opsec] fail-closed : aucune interface VPN (proton*/wg*/tun*/mullvad*) — cage refusée" >&2
-        echo "[opsec] connecte ProtonVPN puis relance opencode-caged" >&2
+    # Fallback nmcli : VPN géré par NM sans iface tunnel visible (ex : Windscribe Linux)
+    if test $vpn_up -eq 0
+        if command -v nmcli >/dev/null 2>&1
+            if nmcli -t -f TYPE,DEVICE connection show --active 2>/dev/null | grep -qE '^vpn:|^wireguard:'
+                set -l vpn_up 1
+            end
+        end
+    end
+    if test $vpn_up -eq 0
+        echo "[opsec] fail-closed : aucun VPN actif (ni iface, ni nmcli) — cage refusée" >&2
+        echo "[opsec] connecte le VPN puis relance opencode-caged" >&2
         return 1
     end
 
