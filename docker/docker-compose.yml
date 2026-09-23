@@ -6,6 +6,15 @@ services:
     container_name: redteam-tor-gateway
     networks:
       - tor_net
+    # T16 OPSEC : SOCKS5 Tor publié sur loopback hôte uniquement — permet de
+    # router nmap/nuclei/osint/cve-lookup via scripts/tor-socks5-wrap.sh et
+    # scripts/proxychains-redteam.conf (et répare tor-wrap.sh qui visait déjà
+    # 127.0.0.1:9050 sans que rien n'écoute). Ne pas exposer ailleurs que 127.0.0.1.
+    ports:
+      - "127.0.0.1:9050:9050"
+      # T16 : DNSPort Tor pour nmap --dns-servers (UDP interne nmap non hookable
+      # par proxychains) — loopback host uniquement, port host53053 (5353 = mDNS).
+      - "127.0.0.1:53053:5353/udp"
     restart: unless-stopped
 
   kali-redteam:
