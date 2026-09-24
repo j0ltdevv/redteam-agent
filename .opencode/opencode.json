@@ -65,7 +65,7 @@
       "type": "local",
       "command": [
         "bash",
-        "scripts/start_metasploit_mcp.sh"
+        "/home/j0wlt/redteam-agent/scripts/start_metasploit_mcp.sh"
       ],
       "enabled": true,
       "timeout": 30000,
