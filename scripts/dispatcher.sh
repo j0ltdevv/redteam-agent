@@ -159,6 +159,23 @@ record_dispatch() {
        VALUES ('${agent}', '${type}', '${stage}', '|${ids}|');" || true
 }
 
+# print_opsec_banner — echo the run-wide OPSEC posture on stderr with every
+# fetch, so the constraint sits inside the exact tool result the operator reads.
+# Modes come from scope.json.opsec_mode (set by a direct operator order).
+print_opsec_banner() {
+  local dir mode scope
+  dir="$(engagement_dir_from_db "$DB")"
+  scope="$dir/scope.json"
+  mode="normal"
+  if [[ -f "$scope" ]] && command -v jq >/dev/null 2>&1; then
+    mode="$(jq -r '.opsec_mode // "normal"' "$scope" 2>/dev/null || echo normal)"
+  fi
+  case "$mode" in
+    normal|agressif|"") return 0 ;;
+  esac
+  echo "OPSEC_MODE=${mode} — standing constraint: passif = zero packets to target; stealth = GET-first, <=1 req/s, stop on 429/WAF. Cases not workable in this mode: REQUEUE reason=opsec_mode." >&2
+}
+
 # clear_dispatch_journal <comma-separated-ids> — called on explicit operator
 # re-open (requeue / retry-errors / forced reset-stale): the operator said
 # "redo this work", so the redo is not a duplicate.
@@ -488,6 +505,7 @@ case "$ACTION" in
     # Stop-lock gate: a stopped engagement must not be able to hand out work.
     # This is the enforcement point described in scripts/lib/engagement_lock.sh.
     require_unlocked "$(engagement_dir_from_db "$DB")" "fetch (${AGENT}, type=${TYPE})"
+    print_opsec_banner
 
     # Escape single quotes for SQL safety
     TYPE="${TYPE//\'/\'\'}"
@@ -565,6 +583,7 @@ case "$ACTION" in
 
     # Stop-lock gate (same enforcement point as the legacy fetch path).
     require_unlocked "$(engagement_dir_from_db "$DB")" "fetch-by-stage (${AGENT}, stage=${STAGE}, type=${TYPE})"
+    print_opsec_banner
 
     if ! _validate_stage "$STAGE"; then
       exit 1

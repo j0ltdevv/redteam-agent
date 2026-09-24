@@ -66,6 +66,11 @@ REQUIRED_SNIPPETS = [
     'MUST NOT reconfigure the run',
     'REQUIRES `--evidence <path>`',
     'exits 1. Marking cases exploited to unblock the queue',
+    # --- OPSEC modes (passif / stealth are executable constraints) ---
+    'OPSEC Modes: passif / stealth / normal / agressif',
+    'OPSEC=<mode> — <one-line constraint>',
+    'reason `opsec_mode`',
+    'The default reading of \"ne me détecte pas\" is `stealth`',
 ]
 
 

@@ -90,9 +90,15 @@ print(f"{secs // 3600}h{(secs % 3600) // 60:02d}m{secs % 60:02d}s")
 PY
 )"
 
+OPSEC_MODE="$(jqget "$SCOPE" '.opsec_mode // "normal"' normal)"
+
 echo "SNAPSHOT_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 echo "ENG_DIR=$ENG_DIR"
 echo "SCOPE target=$TARGET status=$STATUS phase=$PHASE elapsed=$ELAPSED"
+echo "OPSEC=$OPSEC_MODE"
+if [[ "$OPSEC_MODE" != "normal" && "$OPSEC_MODE" != "agressif" ]]; then
+    echo "OPSEC_NOTE: standing constraint — passif = zero packets to target; stealth = GET-first, <=1 req/s, stop on 429/WAF. Cases not workable in this mode get REQUEUEd with reason opsec_mode."
+fi
 
 # --- queue (one sqlite call per aggregate, not one per question) -------------
 if [[ -f "$CASES_DB" ]]; then

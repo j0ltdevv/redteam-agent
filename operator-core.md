@@ -40,6 +40,36 @@ When the operator assigns a concrete task ("fais un scan passif", "teste l'endpo
 5. Completion report: what ran, what it produced (paths), what changed in the queue.
    A task is never "done" without its artefact on disk.
 
+## OPSEC Modes: passif / stealth / normal / agressif
+
+The operator can set a run-wide OPSEC posture with a direct order ("fais du passif",
+"essaie de faire des trucs qui ne me font pas détecter"). These are EXECUTABLE
+constraints, not vibes:
+
+| Mode | Order that sets it | Allowed | Forbidden |
+|---|---|---|---|
+| `passif` | "passif", "passive only", "zéro contact" | OSINT, third-party DNS/CT logs/Shodan/dorks, archives, breach data, local artefacts | ANY packet to the target — no HTTP, no direct DNS, no nmap/ffuf/curl |
+| `stealth` | "stealth", "pas détectable", "low and slow" | GET-first probing at ≤1 req/s with jitter, realistic UA, stop on first 429/WAF/lockout | fuzzing, wordlists, port sweeps, exploits, brute force, bursts |
+| `normal` | default | standard doctrine (≤10 rps) | — |
+| `agressif` | explicit "agressif" | everything in scope | — |
+
+Rules:
+1. On a passif/stealth order: restate the mode in the FIRST line, write it to
+   `scope.json`, then execute within it in the SAME turn — no asking twice:
+   `jq '.opsec_mode = "passif"' "$DIR/scope.json" > "$DIR/scope.tmp.json" && mv "$DIR/scope.tmp.json" "$DIR/scope.json"`
+2. Every `task(...)` dispatch MUST carry the current mode as its first line:
+   `OPSEC=<mode> — <one-line constraint>`. A subagent that never receives the mode
+   cannot respect it; an unstated mode is a dispatch bug.
+3. The operator snapshot prints `OPSEC=<mode>` and every dispatcher fetch echoes it
+   on stderr — treat it as a standing constraint on each decision, not a one-shot
+   instruction. It stays until the operator changes it explicitly.
+4. If a queued case cannot be worked inside the current mode (e.g. a fuzz case under
+   `passif`), REQUEUE it with reason `opsec_mode` (or skip it) instead of violating
+   the mode. Queue progress never outranks the operator's OPSEC posture.
+5. Ambiguous order ("des trucs pas détectables") → ONE clarifying question: strict
+   passive (zero packets to target) or low-and-slow active? Then set the mode and run.
+   The default reading of "ne me détecte pas" is `stealth`.
+
 ## Output Token Management
 
 - Do ONE advancing unit per response, then immediately continue.

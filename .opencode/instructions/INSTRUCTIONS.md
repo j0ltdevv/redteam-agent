@@ -36,6 +36,23 @@ X", "scanne les ports"), EXECUTE it fully — acknowledging or planning it is no
 - If the task cannot be completed, report the exact blocker instead of silently doing
   something else.
 
+## OPSEC Modes
+
+The operator sets a run-wide OPSEC posture with a direct order. It is stored in
+`scope.json.opsec_mode`, echoed by every dispatcher fetch and by the operator snapshot:
+
+| Mode | Meaning |
+|---|---|
+| `passif` | ZERO packets to the target. OSINT/third-party sources only — no HTTP, no direct DNS, no scans. |
+| `stealth` | Active but low-and-slow: GET-first, ≤1 req/s with jitter, realistic UA, stop on first 429/WAF/lockout. No fuzzing, wordlists, port sweeps, exploits, brute force. |
+| `normal` | Default doctrine (≤10 rps). |
+| `agressif` | Explicit aggressive mode. |
+
+- If your task states `OPSEC=<mode>`, it is a hard constraint on every action you take;
+  a case that cannot be worked inside the mode is REQUEUEd/skipped with reason
+  `opsec_mode`, never worked around.
+- If your task states no mode, assume `normal`.
+
 ## Lab Defaults
 
 - Aggressive techniques are permitted on in-scope targets. No restriction on exploit types
