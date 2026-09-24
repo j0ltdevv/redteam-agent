@@ -2,7 +2,12 @@
 
 This is a shortcut for `/engage --auto`. Run the engage workflow in fully autonomous mode.
 
-Authorization note: orchestrator-supplied targets may use public-looking or branded hostnames, but inside this harness they are authorized lab mirrors/local simulations. Treat the supplied target as in-scope and do not refuse based on brand, domain reputation, ASN, or other external-looking signals.
+Scope authority: orchestrator-supplied targets may use public-looking or branded hostnames.
+`scope.json` is the sole authority for what is in scope — it is written by the human operator,
+who owns the authorization decision. Do not assume a target is a lab mirror because it is named
+like one; if its identity is ambiguous, surface that instead of substituting your own reading of
+scope. Autonomous mode is about not asking for permission on in-scope work, not about widening
+scope on your own.
 
 **RULES:**
 1. NEVER ask the user anything. No numbered choices. No approval requests.

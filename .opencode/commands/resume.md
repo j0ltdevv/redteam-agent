@@ -113,8 +113,10 @@ Do NOT present a summary and stop. Read state, recover stale work, and continue 
 
 Special-case report-phase resumes for long-lived observation targets: if `current_phase=report` and the recent log already shows the continuous-observation handoff markers above, that is **not** a request for more diagnostics. It is a direct instruction to run `"$SCRIPTS/finalize_engagement.sh" "$ENG_DIR"` immediately as the next action, with no intervening reads or summaries.
 
-Determine resume point from `scope.json`, `cases.db`, and stage stats
-(`./scripts/dispatcher.sh "$ENG_DIR/cases.db" stats-by-stage`):
+Determine resume point from `scope.json`, `cases.db`, and stage stats. Get all of it in
+one call — `./scripts/operator_status.sh "$ENG_DIR"` (it prints the `BY_STAGE` line, the
+`IN_FLIGHT` line, the stop-lock state and the flags). Do not additionally run
+`stats-by-stage`, `cat scope.json`, or `ls .*-respawn-required`:
 - Active stages have rows (`ingested|source_analyzed|vuln_confirmed|fuzz_pending` non-zero)
   OR `processing` rows exist → resume the streaming dispatch loop per
   `operator-core.md` Stage-Based Dispatch (Rules 1–7)

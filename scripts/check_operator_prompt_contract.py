@@ -47,6 +47,19 @@ REQUIRED_SNIPPETS = [
     'After `./scripts/update_phase_from_stages.sh "$DIR"` prints `phase: consume_test -> complete`',
     'A standalone final answer such as `[operator] Resume continued... closure work is still ongoing` after queue drain is forbidden',
     '`surface coverage and CTF recall follow-up still required` / `closure work is still ongoing`',
+    # --- stop lock / non-blocking dispatch / anti-polling / output budget ---
+    'Dispatch is non-blocking (never wait on a subagent)',
+    'Never emit a turn whose only purpose is to wait for a subagent',
+    'Idle-with-work-pending is a run failure',
+    'NEVER end a turn with no tool call and no text',
+    './scripts/stop_engagement.sh "$DIR"',
+    'never dispatch\n  anything after it',
+    'Subagent Output Budget',
+    'A subagent handoff longer than 40 lines is a contract violation',
+    'State Reads: Anti-Polling Contract',
+    './scripts/operator_status.sh "$DIR"',
+    'POLL_WARNING',
+    'REDTEAM_STATUS_MAX_PER_PHASE',
 ]
 
 

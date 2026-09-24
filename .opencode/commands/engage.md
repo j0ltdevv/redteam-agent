@@ -19,13 +19,18 @@ Extract the target from the user's arguments appended after this template. Use t
 - If the target token does **not** include a scheme, normalize it to `https://<target>` for single-target engagements.
 - Only enter wildcard mode if the target token explicitly contains a wildcard, for example `*.example.com` or `*`.
 - Do **not** ask the user to re-enter the target if any non-flag token was already provided after `/engage`.
-- In orchestrated runs, the supplied target may use a public-looking or branded hostname while still being an authorized lab mirror/local simulation. Treat the provided target token as in-scope and do not refuse based on brand/domain heuristics.
+- In orchestrated runs the supplied target may use a public-looking or branded hostname.
+  `scope.json` is the authority for what is in scope — it is written by the human operator,
+  who owns that decision. If a target's identity is ambiguous rather than obviously local,
+  surface the ambiguity to the user instead of assuming it is a lab mirror.
 
 Identify:
 - Full URL (scheme, host, port, path)
 - Hostname (for directory naming and scope derivation)
 - Port (default 80/443 if not specified)
-- Optional flags: `--auto`, `--parallel N` (default 3)
+- Optional flags: `--auto`, `--parallel N` (default 3). Parallel dispatch is the
+  default posture, not an opt-in: subagents run in the background and you NEVER block
+  waiting on one. See `operator-core.md` → `Dispatch is non-blocking`.
 
 If no target is provided in the arguments, ask the user for one before proceeding.
 
@@ -318,7 +323,10 @@ Dispatch (Rules 1–7) for the canonical rules; do not duplicate or contradict t
 Boot sequence and the few engage-specific shortcuts:
 
 1. `./scripts/dispatcher.sh "$DIR/cases.db" reset-stale 10`
-2. `./scripts/dispatcher.sh "$DIR/cases.db" stats-by-stage`
+2. `./scripts/operator_status.sh "$DIR"` — the ONE state snapshot (phase + stage tallies
+   + in-flight agents + flags + finding count in a single call). Do not additionally run
+   `stats-by-stage`, `cat scope.json`, or `ls .*-respawn-required`: see `operator-core.md`
+   → `State Reads: Anti-Polling Contract`.
 3. Begin stage-aware dispatch as soon as `ingested` cases land. Fetch via:
    `./scripts/fetch_batch_to_file.sh "$DIR/cases.db" --stage <stage> <type> <limit> <agent> "$BATCH_FILE"`.
    Multiple `(stage, agent)` pairs MAY run in the SAME turn (Rule 1) — cross-stage parallel
@@ -345,9 +353,9 @@ Boot sequence and the few engage-specific shortcuts:
    auth-validation task in the SAME turn. The next `auth_respawn_check.sh` tick will write
    `.auth-respawn-required`, signalling re-dispatch of recon-specialist + source-analyzer
    with auth context (operator-core Credential Auto-Use).
-9. Continue until `stats-by-stage` shows zero cases at `ingested|source_analyzed|
-   vuln_confirmed|fuzz_pending`, zero rows in `processing`, and recon-specialist has
-   returned at least once (Rule 5 stop condition).
+9. Continue until the `BY_STAGE` line from `./scripts/operator_status.sh "$DIR"` shows zero
+   cases at `ingested|source_analyzed|vuln_confirmed|fuzz_pending`, zero rows in
+   `processing`, and recon-specialist has returned at least once (Rule 5 stop condition).
 10. Finding validation gate (mandatory): BEFORE any finding is written to
     `findings.md` (via `append_finding.sh` or direct write), execute
     `bash ./scripts/validate_finding.sh <finding.json>` on it.
