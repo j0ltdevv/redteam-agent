@@ -9,6 +9,7 @@ source "$SCRIPT_DIR/lib/params.sh"
 source "$SCRIPT_DIR/lib/placeholders.sh"
 source "$SCRIPT_DIR/lib/source_queue_filter.sh"
 source "$SCRIPT_DIR/lib/engagement_lock.sh"
+source "$SCRIPT_DIR/lib/evidence_gate.sh"
 
 # Emit a `case_done` runtime event per id so the orchestrator's cases /
 # dispatches mirror tables stay populated under SERIALIZED dispatch.
@@ -51,10 +52,17 @@ if [[ -z "$DB" || -z "$ACTION" ]]; then
   echo "  fetch-by-stage <stage> <type> <limit> <agent>"
   echo "                                 Stage-aware fetch (preferred); cases must"
   echo "                                 be at <stage> AND of <type>; sets status=processing"
-  echo "  done <id_list> [--stage S]     Mark IDs as done; optional --stage advances pipeline"
+  echo "  done <id_list> [--stage S] [--evidence PATH]"
+  echo "                                 Mark IDs as done; --stage advances the pipeline."
+  echo "                                 --stage exploited REQUIRES --evidence <path>: a"
+  echo "                                 non-empty artefact inside the engagement dir"
   echo "  error <id_list>                Mark comma-separated IDs as error"
-  echo "  set-stage <id_list> <stage>    Bulk update stage column (no status change)"
-  echo "  reset-stale <minutes>          Recover stuck processing cases"
+  echo "  set-stage <id_list> <stage> [--evidence PATH]"
+  echo "                                 Bulk update stage column (no status change);"
+  echo "                                 stage=exploited requires --evidence <path>"
+  echo "  reset-stale <minutes> [--force]"
+  echo "                                 Recover stuck processing cases (floor 5 min;"
+  echo "                                 --force overrides the floor)"
   echo "  retry-errors [max_retries]     Retry error cases (default max: 2)"
   echo "  migrate                        Add missing schema columns (idempotent)"
   echo "  requeue [id_list ...] [reason] Requeue existing case IDs or read JSON lines from stdin"
@@ -64,7 +72,12 @@ if [[ -z "$DB" || -z "$ACTION" ]]; then
   echo ""
   echo "Stop lock:"
   echo "  While <engagement_dir>/.stop-lock exists, fetch / fetch-by-stage exit 3"
-  echo "  without handing out work. Take the lock with ./scripts/stop_engagement.sh."
+  echo "  without handing out work. Mutating actions (done/error/set-stage/requeue/"
+  echo "  reset-stale/retry-errors) also exit 3 while the lock is held."
+  echo "  Take the lock with ./scripts/stop_engagement.sh."
+  echo ""
+  echo "Exit codes: 3 = engagement stopped (stop lock)"
+  echo "            4 = duplicate dispatch refused (case re-pended inside window)"
   echo ""
   echo "Stage values (pipeline state machine):"
   echo "  ingested         freshly discovered, needs first-pass triage"
@@ -80,6 +93,85 @@ fi
 
 sql() {
   sqlite3 "$DB" ".timeout 5000" "$1"
+}
+
+# --- duplicate-dispatch journal -------------------------------------------
+# Every successful fetch is journaled. If a case returns to `pending` for the
+# SAME (agent, type, stage) inside REDTEAM_DUP_DISPATCH_WINDOW seconds without
+# an intervening explicit requeue/retry/reset, the second fetch is refused
+# (exit 4): that is the signature of the 00:00/00:01 double-dispatch where the
+# same exploit task was launched twice in consecutive minutes.
+REDTEAM_DUP_DISPATCH_WINDOW="${REDTEAM_DUP_DISPATCH_WINDOW:-600}"
+
+ensure_dispatch_log_table() {
+  sql "CREATE TABLE IF NOT EXISTS dispatch_log (
+         seq INTEGER PRIMARY KEY AUTOINCREMENT,
+         ts TEXT NOT NULL DEFAULT (datetime('now')),
+         agent TEXT NOT NULL,
+         type TEXT NOT NULL,
+         stage TEXT NOT NULL DEFAULT '-',
+         case_ids TEXT NOT NULL
+       );" 2>/dev/null || true
+}
+
+# check_duplicate_dispatch <agent> <type> <stage> <comma-separated-ids>
+# Exits 4 when any id was handed to the same (agent,type,stage) inside the
+# window and is pending again without an explicit operator re-open.
+check_duplicate_dispatch() {
+  local agent="$1" type="$2" stage="$3" ids="$4"
+  [[ "${REDTEAM_DUP_DISPATCH_WINDOW}" =~ ^[0-9]+$ ]] || return 0
+  (( REDTEAM_DUP_DISPATCH_WINDOW > 0 )) || return 0
+  [[ -n "$ids" ]] || return 0
+  ensure_dispatch_log_table
+  local id hits
+  for id in ${ids//,/ }; do
+    [[ "$id" =~ ^[0-9]+$ ]] || continue
+    hits=$(sql "SELECT COUNT(*) FROM dispatch_log
+                WHERE agent='${agent}' AND type='${type}' AND stage='${stage}'
+                  AND case_ids LIKE '%|${id}|%'
+                  AND ts > datetime('now', '-${REDTEAM_DUP_DISPATCH_WINDOW} seconds');")
+    if [[ "${hits:-0}" =~ ^[0-9]+$ ]] && (( hits > 0 )); then
+      cat >&2 <<EOF
+FATAL: duplicate dispatch refused — case ${id} was handed to ${agent}
+       (type=${type} stage=${stage}) less than ${REDTEAM_DUP_DISPATCH_WINDOW}s ago
+       and is pending again. A case that re-pends that fast means a reset/requeue
+       landed while the first dispatch may still be running (the failure mode
+       observed at 00:00/00:01 on 2026-09-23).
+       Investigate the first dispatch before re-dispatching. To proceed
+       deliberately: requeue the case explicitly (clears the journal entry) or
+       re-run with REDTEAM_DUP_DISPATCH_WINDOW=0.
+EOF
+      exit 4
+    fi
+  done
+  return 0
+}
+
+# record_dispatch <agent> <type> <stage> <result-json> — journal handed-out ids.
+record_dispatch() {
+  local agent="$1" type="$2" stage="$3" result_json="$4"
+  local ids
+  command -v jq >/dev/null 2>&1 || return 0
+  ids=$(printf '%s' "$result_json" | jq -r '.[]?.id // empty' 2>/dev/null | paste -sd'|' - || true)
+  [[ -n "$ids" ]] || return 0
+  ensure_dispatch_log_table
+  sql "INSERT INTO dispatch_log (agent, type, stage, case_ids)
+       VALUES ('${agent}', '${type}', '${stage}', '|${ids}|');" || true
+}
+
+# clear_dispatch_journal <comma-separated-ids> — called on explicit operator
+# re-open (requeue / retry-errors / forced reset-stale): the operator said
+# "redo this work", so the redo is not a duplicate.
+clear_dispatch_journal() {
+  local ids="${1:-}"
+  [[ -n "$ids" ]] || return 0
+  ensure_dispatch_log_table
+  local id
+  for id in ${ids//,/ }; do
+    [[ "$id" =~ ^[0-9]+$ ]] || continue
+    sql "DELETE FROM dispatch_log WHERE case_ids LIKE '%|${id}|%';" || true
+  done
+  return 0
 }
 
 ensure_cases_column() {
@@ -378,9 +470,20 @@ case "$ACTION" in
     ;;
 
   fetch)
-    TYPE="${3:?Missing type argument}"
-    LIMIT="${4:?Missing limit argument}"
-    AGENT="${5:?Missing agent argument}"
+    # Positional args with optional --force (skips the duplicate-dispatch gate).
+    FORCE_FETCH=0
+    FETCH_POS=()
+    for ((i=3; i<=$#; i++)); do
+      _arg="${!i}"
+      if [[ "$_arg" == "--force" ]]; then
+        FORCE_FETCH=1
+      else
+        FETCH_POS+=("$_arg")
+      fi
+    done
+    TYPE="${FETCH_POS[0]:?Missing type argument}"
+    LIMIT="${FETCH_POS[1]:?Missing limit argument}"
+    AGENT="${FETCH_POS[2]:?Missing agent argument}"
 
     # Stop-lock gate: a stopped engagement must not be able to hand out work.
     # This is the enforcement point described in scripts/lib/engagement_lock.sh.
@@ -408,13 +511,22 @@ case "$ACTION" in
 
     ORDER_CLAUSE="$(fetch_priority_order_clause "$TYPE")"
 
+    # Duplicate-dispatch gate: refuse if these pending ids were already handed
+    # to this (agent, type) inside the journal window (exit 4).
+    if (( FORCE_FETCH == 0 )); then
+      CANDIDATE_IDS="$(sqlite3 "$DB" ".timeout 5000" "SELECT id FROM cases WHERE status = 'pending' AND type = '${TYPE}' AND stage IN ('ingested', 'vuln_confirmed', 'fuzz_pending') ${ORDER_CLAUSE} LIMIT ${LIMIT};")"
+      if [[ -n "${CANDIDATE_IDS//[$'\n']/}" ]]; then
+        check_duplicate_dispatch "$AGENT" "$TYPE" "-" "$(printf '%s' "$CANDIDATE_IDS" | tr '\n' ',' | sed 's/,$//')"
+      fi
+    fi
+
     # Legacy fetch: pulls 'pending' cases regardless of stage. Kept for
     # backward compatibility; new code should use fetch-by-stage to gate
     # per pipeline stage. The legacy path defaults to ingested-stage
     # cases so it doesn't accidentally re-dispatch already-processed
     # work that's at a later stage (e.g. vuln_confirmed shouldn't be
     # eligible for source-analyzer just because it's pending again).
-    sqlite3 "$DB" ".timeout 5000" -json "
+    FETCH_RESULT="$(sqlite3 "$DB" ".timeout 5000" -json "
       UPDATE cases
       SET status = 'processing',
           assigned_agent = '${AGENT}',
@@ -427,14 +539,29 @@ case "$ACTION" in
         LIMIT ${LIMIT}
       )
       RETURNING *;
-    "
+    ")"
+    if [[ -n "$FETCH_RESULT" ]]; then
+      printf '%s\n' "$FETCH_RESULT"
+    fi
+    record_dispatch "$AGENT" "$TYPE" "-" "$FETCH_RESULT"
     ;;
 
   fetch-by-stage)
-    STAGE="${3:?Missing stage argument}"
-    TYPE="${4:?Missing type argument}"
-    LIMIT="${5:?Missing limit argument}"
-    AGENT="${6:?Missing agent argument}"
+    # Positional args with optional --force (skips the duplicate-dispatch gate).
+    FORCE_FETCH=0
+    FETCH_POS=()
+    for ((i=3; i<=$#; i++)); do
+      _arg="${!i}"
+      if [[ "$_arg" == "--force" ]]; then
+        FORCE_FETCH=1
+      else
+        FETCH_POS+=("$_arg")
+      fi
+    done
+    STAGE="${FETCH_POS[0]:?Missing stage argument}"
+    TYPE="${FETCH_POS[1]:?Missing type argument}"
+    LIMIT="${FETCH_POS[2]:?Missing limit argument}"
+    AGENT="${FETCH_POS[3]:?Missing agent argument}"
 
     # Stop-lock gate (same enforcement point as the legacy fetch path).
     require_unlocked "$(engagement_dir_from_db "$DB")" "fetch-by-stage (${AGENT}, stage=${STAGE}, type=${TYPE})"
@@ -462,12 +589,21 @@ case "$ACTION" in
 
     ORDER_CLAUSE="$(fetch_priority_order_clause "$TYPE")"
 
+    # Duplicate-dispatch gate (stage-aware): refuse if these pending ids were
+    # already handed to this (agent, type, stage) inside the journal window.
+    if (( FORCE_FETCH == 0 )); then
+      CANDIDATE_IDS="$(sqlite3 "$DB" ".timeout 5000" "SELECT id FROM cases WHERE status = 'pending' AND type = '${TYPE}' AND stage = '${STAGE_ESC}' ${ORDER_CLAUSE} LIMIT ${LIMIT};")"
+      if [[ -n "${CANDIDATE_IDS//[$'\n']/}" ]]; then
+        check_duplicate_dispatch "$AGENT" "$TYPE" "$STAGE_ESC" "$(printf '%s' "$CANDIDATE_IDS" | tr '\n' ',' | sed 's/,$//')"
+      fi
+    fi
+
     # Stage-aware fetch: cases must be at the requested stage AND of the
     # requested type AND status=pending. Sets status=processing and
     # assigned_agent. Stage column is NOT changed here — stage transition
     # is the subagent's responsibility (via 'done --stage' or
     # 'set-stage') so the operator can audit transitions explicitly.
-    sqlite3 "$DB" ".timeout 5000" -json "
+    FETCH_RESULT="$(sqlite3 "$DB" ".timeout 5000" -json "
       UPDATE cases
       SET status = 'processing',
           assigned_agent = '${AGENT}',
@@ -479,23 +615,35 @@ case "$ACTION" in
         LIMIT ${LIMIT}
       )
       RETURNING *;
-    "
+    ")"
+    if [[ -n "$FETCH_RESULT" ]]; then
+      printf '%s\n' "$FETCH_RESULT"
+    fi
+    record_dispatch "$AGENT" "$TYPE" "$STAGE_ESC" "$FETCH_RESULT"
     ;;
 
   done)
     shift 2
+    require_unlocked "$(engagement_dir_from_db "$DB")" "done"
     # Optional `--stage <stage>` flag: advance pipeline at the same time.
     # Without --stage, status flips to 'done' but stage is unchanged
     # (legacy behaviour). With --stage, stage column is updated atomically
     # and status flips to 'pending' if the new stage is non-terminal so
     # the next subagent can pick it up; status flips to 'done' if the new
     # stage is terminal (clean / exploited / errored).
+    # Optional `--evidence <path>`: MANDATORY when the target stage is
+    # 'exploited' (see lib/evidence_gate.sh).
     NEW_STAGE=""
+    EVIDENCE=""
     DONE_ARGS=()
     while (($#)); do
       case "$1" in
         --stage)
           NEW_STAGE="${2:?Missing stage value after --stage}"
+          shift 2
+          ;;
+        --evidence)
+          EVIDENCE="${2:?Missing path after --evidence}"
           shift 2
           ;;
         *)
@@ -508,6 +656,9 @@ case "$ACTION" in
     if [[ -n "$NEW_STAGE" ]]; then
       if ! _validate_stage "$NEW_STAGE"; then
         exit 1
+      fi
+      if [[ "$NEW_STAGE" == "exploited" ]]; then
+        require_exploit_evidence "$EVIDENCE" "$DB"
       fi
     fi
 
@@ -543,15 +694,33 @@ case "$ACTION" in
 
   set-stage)
     shift 2
-    if (($# < 2)); then
-      echo "Usage: dispatcher.sh <db> set-stage <id_list> <stage>" >&2
+    require_unlocked "$(engagement_dir_from_db "$DB")" "set-stage"
+    EVIDENCE=""
+    SS_ARGS=()
+    while (($#)); do
+      case "$1" in
+        --evidence)
+          EVIDENCE="${2:?Missing path after --evidence}"
+          shift 2
+          ;;
+        *)
+          SS_ARGS+=("$1")
+          shift
+          ;;
+      esac
+    done
+    if ((${#SS_ARGS[@]} < 2)); then
+      echo "Usage: dispatcher.sh <db> set-stage <id_list> <stage> [--evidence PATH]" >&2
       exit 1
     fi
-    NEW_STAGE="${@: -1}"
+    NEW_STAGE="${SS_ARGS[$((${#SS_ARGS[@]} - 1))]}"
     if ! _validate_stage "$NEW_STAGE"; then
       exit 1
     fi
-    SET_ARGS=("${@:1:$#-1}")
+    if [[ "$NEW_STAGE" == "exploited" ]]; then
+      require_exploit_evidence "$EVIDENCE" "$DB"
+    fi
+    SET_ARGS=("${SS_ARGS[@]:0:$(( ${#SS_ARGS[@]} - 1 ))}")
     ID_LIST="$(normalize_id_list "${SET_ARGS[@]}")"
     sql "UPDATE cases SET stage='${NEW_STAGE}' WHERE id IN (${ID_LIST});"
     echo "Set stage=${NEW_STAGE} for: ${ID_LIST}"
@@ -559,6 +728,7 @@ case "$ACTION" in
 
   error)
     shift 2
+    require_unlocked "$(engagement_dir_from_db "$DB")" "error"
     ID_LIST="$(normalize_id_list "$@")"
     sql "UPDATE cases SET status='error', stage='errored', retry_count = COALESCE(retry_count,0) + 1 WHERE id IN (${ID_LIST});"
     echo "Marked error: ${ID_LIST}"
@@ -578,12 +748,19 @@ case "$ACTION" in
     ;;
 
   retry-errors)
+    require_unlocked "$(engagement_dir_from_db "$DB")" "retry-errors"
     MAX_RETRIES="${3:-2}"
     if ! [[ "$MAX_RETRIES" =~ ^[0-9]+$ ]]; then
       echo "ERROR: max_retries must be a positive integer" >&2
       exit 1
     fi
     BEFORE=$(sql "SELECT COUNT(*) FROM cases WHERE status='error' AND COALESCE(retry_count,0) < ${MAX_RETRIES};")
+    # Explicit operator re-open: clear the duplicate-dispatch journal for the
+    # ids about to be re-pended so the deliberate retry is not refused later.
+    RETRY_IDS=$(sql "SELECT group_concat(id) FROM cases WHERE status='error' AND COALESCE(retry_count,0) < ${MAX_RETRIES};")
+    if [[ -n "${RETRY_IDS:-}" ]]; then
+        clear_dispatch_journal "$RETRY_IDS"
+    fi
     # Reset stage to ingested when retrying error cases — they need to
     # re-enter the active pipeline, not stay at 'errored' (which is
     # outside the legacy fetch's stage filter).
@@ -592,19 +769,52 @@ case "$ACTION" in
     ;;
 
   reset-stale)
-    MINUTES="${3:?Missing minutes argument}"
+    require_unlocked "$(engagement_dir_from_db "$DB")" "reset-stale"
+    # Positional minutes with optional --force (override the 5-minute floor).
+    RS_FORCE=0
+    RS_POS=()
+    for ((i=3; i<=$#; i++)); do
+      _arg="${!i}"
+      if [[ "$_arg" == "--force" ]]; then
+        RS_FORCE=1
+      else
+        RS_POS+=("$_arg")
+      fi
+    done
+    MINUTES="${RS_POS[0]:?Missing minutes argument}"
     # Validate MINUTES is numeric
     if ! [[ "$MINUTES" =~ ^[0-9]+$ ]]; then
       echo "ERROR: minutes must be a positive integer" >&2
       exit 1
     fi
-    BEFORE=$(sql "SELECT COUNT(*) FROM cases WHERE status='processing' AND consumed_at < datetime('now', '-${MINUTES} minutes');")
-    sql "UPDATE cases SET status='pending', assigned_agent=NULL, consumed_at=NULL WHERE status='processing' AND consumed_at < datetime('now', '-${MINUTES} minutes');"
+    # Floor: `reset-stale 0` was used on 2026-09-23 to instantly re-pend
+    # in-flight cases, which is how the same exploit batch got dispatched
+    # twice in consecutive minutes. Below 5 minutes requires --force.
+    if (( MINUTES < 5 )) && (( RS_FORCE == 0 )); then
+      cat >&2 <<EOF
+FATAL: reset-stale ${MINUTES} refused — floor is 5 minutes.
+       Resetting younger cases re-pends work that may still be running in an
+       in-flight subagent (this produced the 00:00/00:01 double dispatch on
+       2026-09-23). If the first dispatch is verifiably dead, re-run with:
+         reset-stale ${MINUTES} --force
+EOF
+      exit 1
+    fi
+    STALE_SQL="status='processing' AND consumed_at < datetime('now', '-${MINUTES} minutes')"
+    BEFORE=$(sql "SELECT COUNT(*) FROM cases WHERE ${STALE_SQL};")
+    # The operator explicitly opened these back up: clear their journal rows
+    # so the deliberate re-dispatch is not refused as a duplicate.
+    RESET_IDS=$(sql "SELECT group_concat(id) FROM cases WHERE ${STALE_SQL};")
+    if [[ -n "${RESET_IDS:-}" ]]; then
+        clear_dispatch_journal "$RESET_IDS"
+    fi
+    sql "UPDATE cases SET status='pending', assigned_agent=NULL, consumed_at=NULL WHERE ${STALE_SQL};"
     echo "Reset ${BEFORE} stale case(s) (stuck > ${MINUTES} min)"
     ;;
 
   requeue)
     shift 2
+    require_unlocked "$(engagement_dir_from_db "$DB")" "requeue"
 
     requeued_existing=0
     if (($# > 0)); then
@@ -637,6 +847,8 @@ case "$ACTION" in
                 assigned_agent=NULL,
                 consumed_at=NULL
               WHERE id IN (${ID_LIST});"
+        # Explicit operator re-open: the next dispatch of these ids is wanted.
+        clear_dispatch_journal "$ID_LIST"
         echo "Requeued existing: ${ID_LIST}"
         emit_case_done_batch "REQUEUE" "$ID_LIST"
         requeued_existing=1

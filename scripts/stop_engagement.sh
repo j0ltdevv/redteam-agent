@@ -157,8 +157,27 @@ if [[ -x "$SCRIPT_DIR/append_log_entry.sh" ]]; then
 fi
 
 # --------------------------------------------------------- 5. partial report
-if ((DO_REPORT)) && [[ -x "$SCRIPT_DIR/compose_partial_report.sh" ]]; then
-    "$SCRIPT_DIR/compose_partial_report.sh" "$ENG_DIR" >/dev/null 2>&1 || true
+# Never swallow the outcome silently: an empty/failed partial report is how a
+# run ends with findings.md full and report.md absent (observed 2026-09-23:
+# the 0-byte report.md.partial marker with no visible failure).
+REPORT_STATUS="skipped"
+if ((DO_REPORT)); then
+    if [[ -x "$SCRIPT_DIR/compose_partial_report.sh" ]]; then
+        if REPORT_OUT="$("$SCRIPT_DIR/compose_partial_report.sh" "$ENG_DIR" 2>&1)"; then
+            if [[ -s "$ENG_DIR/report.md" ]]; then
+                REPORT_STATUS="ok"
+            else
+                REPORT_STATUS="empty"
+                echo "WARN: compose_partial_report.sh exited 0 but report.md is empty" >&2
+            fi
+        else
+            REPORT_STATUS="failed"
+            printf 'WARN: compose_partial_report.sh failed: %s\n' "$REPORT_OUT" >&2
+        fi
+    else
+        REPORT_STATUS="missing-script"
+        echo "WARN: compose_partial_report.sh not found; report.md not composed" >&2
+    fi
 fi
 
 if ((QUIET == 0)); then
@@ -166,6 +185,7 @@ if ((QUIET == 0)); then
     echo "=== Engagement stopped ==="
     print_status
     printf 'RELEASED_IN_FLIGHT=%s\n' "$RELEASED"
+    printf 'PARTIAL_REPORT=%s\n' "$REPORT_STATUS"
     echo
     echo "The dispatcher now refuses every fetch for this engagement."
     echo "Resume with: ./scripts/stop_engagement.sh \"$ENG_DIR\" --clear"
