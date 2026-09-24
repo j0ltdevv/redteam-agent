@@ -88,6 +88,98 @@ else
     bad "windscribe_cli.conf missing"
 fi
 
+# --- 5. egress-wrap.sh : même contrat fail-closed ---------------------------
+STUB2="$(mktemp -d)"
+for stub in docker ss windscribe-cli
+do
+    printf '#!/usr/bin/env bash\nexit 0\n' > "$STUB2/$stub"
+    chmod +x "$STUB2/$stub"
+done
+printf '#!/usr/bin/env bash\necho "$@"\n' > "$STUB2/npx"
+chmod +x "$STUB2/npx"
+
+if PATH="$STUB2:/usr/bin:/bin" "$REPO_DIR/scripts/egress-wrap.sh" true >/dev/null 2>&1
+then
+    bad "egress-wrap.sh is fail-open (ran without VPN)"
+else
+    ok "egress-wrap.sh refuses to run without VPN (fail-closed)"
+fi
+if PATH="$STUB2:/usr/bin:/bin" RT_ALLOW_DIRECT=1 "$REPO_DIR/scripts/egress-wrap.sh" true >/dev/null 2>&1
+then
+    ok "egress-wrap.sh RT_ALLOW_DIRECT=1 bypass works"
+else
+    bad "egress-wrap.sh RT_ALLOW_DIRECT=1 bypass broken"
+fi
+
+# --- 6. wrappers MCP : proxy uniquement en mode Tor -------------------------
+OBSCURA_OUT="$(OBSCURA_BIN=/bin/echo "$REPO_DIR/scripts/mcp_obscura.sh" 2>/dev/null || true)"
+if [ "$OBSCURA_OUT" = "mcp" ]
+then
+    ok "mcp_obscura.sh uses no proxy in VPN mode"
+else
+    bad "mcp_obscura.sh VPN-mode args unexpected: [$OBSCURA_OUT]"
+fi
+if RT_USE_TOR=1 OBSCURA_BIN=/bin/echo "$REPO_DIR/scripts/mcp_obscura.sh" >/dev/null 2>&1
+then
+    bad "mcp_obscura.sh starts in Tor mode without a Tor proxy"
+else
+    ok "mcp_obscura.sh refuses Tor mode without a Tor proxy"
+fi
+
+PLAYWRIGHT_OUT="$(PATH="$STUB2:$PATH" "$REPO_DIR/scripts/mcp_playwright.sh" 2>/dev/null || true)"
+if [ "$PLAYWRIGHT_OUT" = "-y @playwright/mcp" ]
+then
+    ok "mcp_playwright.sh uses no proxy in VPN mode"
+else
+    bad "mcp_playwright.sh VPN-mode args unexpected: [$PLAYWRIGHT_OUT]"
+fi
+if PATH="$STUB2:$PATH" RT_USE_TOR=1 "$REPO_DIR/scripts/mcp_playwright.sh" >/dev/null 2>&1
+then
+    bad "mcp_playwright.sh starts in Tor mode without a Tor proxy"
+else
+    ok "mcp_playwright.sh refuses Tor mode without a Tor proxy"
+fi
+rm -rf "$STUB2"
+
+# --- 7. opencode.json : aucun proxy Tor en dur dans les commandes MCP -------
+if python3 - "$REPO_DIR/.opencode/opencode.json" <<'EOPY'
+import json
+import re
+import sys
+
+raw = open(sys.argv[1]).read()
+raw = re.sub(r'^\s*//.*$', '', raw, flags=re.M)
+cfg = json.loads(raw)
+offenders = [
+    name
+    for name, spec in cfg.get('mcp', {}).items()
+    if '9050' in json.dumps(spec.get('command', []))
+]
+if offenders:
+    print('hardcoded proxy in: ' + ', '.join(offenders))
+    sys.exit(1)
+EOPY
+then
+    ok "opencode.json MCP commands have no hardcoded Tor proxy"
+else
+    bad "opencode.json still hardcodes a Tor proxy in an MCP command"
+fi
+
+# --- 8. lanceur redteam + raccourci niri ------------------------------------
+if [ -x "$HOME/.local/bin/rt-term" ]
+then
+    ok "rt-term launcher installed and executable"
+else
+    bad "rt-term launcher missing or not executable"
+fi
+if grep -qE 'Ctrl\+Shift\+O[[:space:]]*\{[[:space:]]*spawn "rt-term"' \
+    "$HOME/.config/niri/cfg/keybinds.kdl" 2>/dev/null
+then
+    ok "niri binds Ctrl+Shift+O to rt-term"
+else
+    bad "niri Ctrl+Shift+O bind missing"
+fi
+
 echo
 echo "passed=$PASS failed=$FAIL"
 [ "$FAIL" -eq 0 ]

@@ -1,52 +1,52 @@
 #!/usr/bin/env bash
-# Route un binaire vers la sortie reseau (VPN mode).
+# tor-socks5-wrap.sh — egress pour les binaires qui ne passent PAS par libc
+# connect() (Go : nuclei-mcp, etc.) : proxychains/LD_PRELOAD est inopérant
+# dessus, on ne peut agir que via les variables d'environnement proxy.
 #
-# VPN-ONLY (2026-09-24) : Tor n'est plus exige. Le trafic herite de la route
-# VPN hote (Windscribe, kill-switch ON). Voir tor-wrap.sh pour le contrat
-# fail-closed complet (RT_USE_TOR=1 pour l'opt-in Tor historique).
-# Pourquoi pas proxychains : les binaires Go (nuclei-mcp) ne passent pas par
-# libc connect() -- LD_PRELOAD/proxychains est inoperant dessus.
+# VPN-ONLY (2026-09-24) : en mode VPN (défaut) aucun proxy n'est injecté — le
+# binaire suit la route par défaut de l'hôte (= tunnel Windscribe).
+# RT_USE_TOR=1 : injecte socks5h://127.0.0.1:9050 (comportement historique).
 #
-# Fail-closed : si le VPN est coupe, refuse de lancer (exit 1)
-# sauf RT_ALLOW_DIRECT=1 (warning logged).
+# Fail-closed : VPN coupé -> exit 1 sauf RT_ALLOW_DIRECT=1 explicite (loggé).
 #
 # Usage: tor-socks5-wrap.sh <command> [args...]
-# Env:   RT_ALLOW_DIRECT=1  # opt-out explicite du fail-closed (logged)
 set -euo pipefail
 
-if [ "$#" -eq "0" ]
-then
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=/dev/null
+. "$SCRIPT_DIR/lib/vpn_state.sh"
+
+if [ "$#" -eq 0 ]; then
     echo "[egress] ERROR: usage: tor-socks5-wrap.sh <command> [args...]" >&2
     exit 2
 fi
 
-vpn_up() {
-    if command -v windscribe-cli >/dev/null 2>&1
-    then
-        windscribe-cli status 2>/dev/null | grep -qiE "connecte|connected" \
-            && ! windscribe-cli status 2>/dev/null | grep -qiE "coupe|disconnected"
-    else
-        return 1
+if [ "$(rt_egress_mode)" = "tor" ]; then
+    if rt_tor_up; then
+        export ALL_PROXY="socks5h://127.0.0.1:9050"
+        export HTTP_PROXY="socks5h://127.0.0.1:9050"
+        export HTTPS_PROXY="socks5h://127.0.0.1:9050"
+        export NO_PROXY="localhost,127.0.0.1,::1"
+        export no_proxy="localhost,127.0.0.1,::1"
+        echo "[egress] Routing through Tor SOCKS5 (127.0.0.1:9050)" >&2
+        exec "$@"
     fi
-}
+    echo "[egress] ERROR: RT_USE_TOR=1 but no Tor proxy available" >&2
+    exit 1
+fi
 
-route_via_vpn() {
+if rt_vpn_up; then
+    unset ALL_PROXY HTTP_PROXY HTTPS_PROXY all_proxy http_proxy https_proxy || true
     export NO_PROXY="localhost,127.0.0.1,::1"
     export no_proxy="localhost,127.0.0.1,::1"
     echo "[egress] Routing through host VPN (kill-switch ON expected)" >&2
-}
-
-if vpn_up
-then
-    route_via_vpn
     exec "$@"
 fi
 
-if [ "${RT_ALLOW_DIRECT:-0}" = "1" ]
-then
-    echo "[egress] WARNING: VPN disconnected, RT_ALLOW_DIRECT=1 set, running WITHOUT egress isolation" >&2
+if rt_allow_direct; then
+    rt_warn_direct
     exec "$@"
 fi
 
-echo "[egress] ERROR: no VPN connection detected (windscribe-cli: disconnected), or set RT_ALLOW_DIRECT=1 explicitly to bypass" >&2
+rt_refuse
 exit 1

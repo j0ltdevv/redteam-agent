@@ -85,7 +85,7 @@
         "run",
         "--with", "mcp<2",
         "--with", "requests",
-        "/home/j0wlt/.hermes/hermes-agent/hexstrike_mcp.py",
+        "/home/j0wlt/pentest-lab/hotel-lab/hexstrike-ai/hexstrike_mcp.py",
         "--server",
         "http://127.0.0.1:8888"
       ],
@@ -124,20 +124,20 @@
     },
     // 2026-09-22 : MCP pentest déplacés du global (décisions 1+2 de l'audit) ->
     // ils ne spawnent que dans ce projet redteam, plus dans les sessions normales.
-    // T16 OPSEC : --proxy SOCKS5 tor-gateway (testé IsTor:true) = obscura ne
-    // sort plus en clair. Lab direct : lancer obscura à la main SANS --proxy
-    // (le proxy Tor ne route pas le RFC1918 ; SSRF privé bloqué par défaut).
+    // EGRESS (2026-09-24) : proxy décidé par le mode, plus écrit en dur.
+    // VPN (défaut)  : `obscura mcp` (route VPN hôte).
+    // RT_USE_TOR=1  : `obscura --proxy socks5://127.0.0.1:9050 mcp`.
     "obscura": {
       "type": "local",
-      "command": ["/home/j0wlt/.local/bin/obscura", "--proxy", "socks5://127.0.0.1:9050", "mcp"],
+      "command": ["/usr/bin/bash", "/home/j0wlt/redteam-agent/scripts/mcp_obscura.sh"],
       "enabled": true
     },
     // playwright = navigateur headless pour le pentest (pages JS/auth).
-    // T16 OPSEC : --proxy-server socks5 tor-gateway + bypass = lab/loopback
-    // reste direct (équivalent localnet de proxychains-redteam.conf).
+    // EGRESS (2026-09-24) : wrapper mode-aware. VPN (défaut) = aucun proxy ;
+    // RT_USE_TOR=1 = --proxy-server socks5 tor-gateway + bypass lab/loopback.
     "playwright": {
       "type": "local",
-      "command": ["npx", "-y", "@playwright/mcp", "--proxy-server", "socks5://127.0.0.1:9050", "--proxy-bypass", "localhost,127.0.0.1,::1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"],
+      "command": ["/usr/bin/bash", "/home/j0wlt/redteam-agent/scripts/mcp_playwright.sh"],
       "enabled": true
     },
     // wstg-pentest = serveur MCP WSTG (bhavsec/autopentest-ai), testé OK.
@@ -146,13 +146,13 @@
       "command": ["/home/j0wlt/.local/bin/uv", "--directory", "/home/j0wlt/pentest-lab/autopentest-ai/server", "run", "server.py"],
       "enabled": true
     },
-    // T16 OPSEC : sortants épinglés via redteam-tor-gateway (SOCKS5 127.0.0.1:9050,
-    // publié en loopback par docker-compose.yml). proxychains-redteam.conf =
-    // socks5 + proxy_dns + localnet (lab/loopback = direct, externe = Tor).
+    // EGRESS (2026-09-24) : egress-wrap.sh choisit la route selon le mode —
+    // VPN (défaut) = exec direct via la route VPN hôte ; RT_USE_TOR=1 =
+    // proxychains4 -f proxychains-redteam.conf (socks5 9050 + proxy_dns + localnet).
     // osint = corrélation multi-sources (Shodan/Censys/VT/ST/Wayback/crt.sh/BGP/RDAP).
     "osint": {
       "type": "local",
-      "command": ["/usr/bin/proxychains4", "-q", "-f", "/home/j0wlt/redteam-agent/scripts/proxychains-redteam.conf", "npx", "-y", "osint-mcp-server"],
+      "command": ["/usr/bin/bash", "/home/j0wlt/redteam-agent/scripts/egress-wrap.sh", "npx", "-y", "osint-mcp-server"],
       "enabled": true
     },
     // caido = proxy-backed MCP (67 tools). Requiert Caido lancé + auth (CAIDO_URL/CAIDO_PAT).
@@ -165,12 +165,13 @@
       "enabled": true,
       "timeout": 30000
     },
-    // T16 : nmap via proxychains + patch dist/index.js (-sT -Pn forcés, raw SYN/UDP/OS
-    // rejetés) — sans ça, le scan raw sortirait en clair hors du tunnel Tor.
-    // Caveat : hostnames lab = IP literals (proxy_dns fake 224 sinon résolu via Tor).
+    // EGRESS (2026-09-24) : egress-wrap.sh (VPN direct par défaut, proxychains en
+    // mode Tor). Patch dist/index.js conservé (-sT -Pn forcés, raw SYN/UDP/OS
+    // rejetés) — sans ça, le scan raw sortirait en clair hors du tunnel.
+    // Caveat : hostnames lab = IP literals (proxy_dns fake 224 en mode Tor).
     "nmap-mcp": {
       "type": "local",
-      "command": ["/usr/bin/proxychains4", "-q", "-f", "/home/j0wlt/redteam-agent/scripts/proxychains-redteam.conf", "node", "/home/j0wlt/redteam-agent/.tools/nmap-mcp-server/dist/index.js"],
+      "command": ["/usr/bin/bash", "/home/j0wlt/redteam-agent/scripts/egress-wrap.sh", "node", "/home/j0wlt/redteam-agent/.tools/nmap-mcp-server/dist/index.js"],
       "enabled": true,
       "timeout": 30000
     },
@@ -187,8 +188,9 @@
     // (mcp 2.x casse Server.list_tools, idem hexstrike). Handshake testé OK 2026-09-22.
     "cve-lookup": {
       "type": "local",
-      // T16 : NVD/EPSS via tor-gateway (chemin absolu — pas de ~ hors shell).
-      "command": ["/usr/bin/proxychains4", "-q", "-f", "/home/j0wlt/redteam-agent/scripts/proxychains-redteam.conf", "/home/j0wlt/.local/bin/cve-lookup-mcp"],
+      // EGRESS (2026-09-24) : egress-wrap.sh (VPN direct par défaut, proxychains
+      // en mode Tor). Chemin absolu — pas de ~ hors shell.
+      "command": ["/usr/bin/bash", "/home/j0wlt/redteam-agent/scripts/egress-wrap.sh", "/home/j0wlt/.local/bin/cve-lookup-mcp"],
       "enabled": true,
       "timeout": 30000
     }
