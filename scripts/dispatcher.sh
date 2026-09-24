@@ -8,6 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/params.sh"
 source "$SCRIPT_DIR/lib/placeholders.sh"
 source "$SCRIPT_DIR/lib/source_queue_filter.sh"
+source "$SCRIPT_DIR/lib/engagement_lock.sh"
 
 # Emit a `case_done` runtime event per id so the orchestrator's cases /
 # dispatches mirror tables stay populated under SERIALIZED dispatch.
@@ -57,6 +58,13 @@ if [[ -z "$DB" || -z "$ACTION" ]]; then
   echo "  retry-errors [max_retries]     Retry error cases (default max: 2)"
   echo "  migrate                        Add missing schema columns (idempotent)"
   echo "  requeue [id_list ...] [reason] Requeue existing case IDs or read JSON lines from stdin"
+  echo "  lock-status                    Show whether the engagement is stopped (stop lock)"
+  echo "  lock <reason_code> [detail]    Freeze the queue: refuse every future fetch"
+  echo "  unlock                         Lift the stop lock (explicit operator resume)"
+  echo ""
+  echo "Stop lock:"
+  echo "  While <engagement_dir>/.stop-lock exists, fetch / fetch-by-stage exit 3"
+  echo "  without handing out work. Take the lock with ./scripts/stop_engagement.sh."
   echo ""
   echo "Stage values (pipeline state machine):"
   echo "  ingested         freshly discovered, needs first-pass triage"
@@ -319,6 +327,26 @@ _validate_stage() {
 }
 
 case "$ACTION" in
+  lock-status)
+    LOCK_DIR="$(engagement_dir_from_db "$DB")"
+    echo "ENG_DIR=${LOCK_DIR}"
+    if engagement_is_locked "$LOCK_DIR"; then
+      echo "STOP_LOCK=held reason=$(engagement_lock_reason "$LOCK_DIR")"
+      exit 0
+    fi
+    echo "STOP_LOCK=none"
+    ;;
+
+  lock)
+    LOCK_DIR="$(engagement_dir_from_db "$DB")"
+    acquire_stop_lock "$LOCK_DIR" "${3:-manual_stop}" "${4:-operator stop via dispatcher}"
+    ;;
+
+  unlock)
+    LOCK_DIR="$(engagement_dir_from_db "$DB")"
+    release_stop_lock "$LOCK_DIR"
+    ;;
+
   stats)
     echo "--- Queue Statistics ---"
     sql "SELECT status, type, COUNT(*) as count FROM cases GROUP BY status, type ORDER BY status, type;"
@@ -353,6 +381,10 @@ case "$ACTION" in
     TYPE="${3:?Missing type argument}"
     LIMIT="${4:?Missing limit argument}"
     AGENT="${5:?Missing agent argument}"
+
+    # Stop-lock gate: a stopped engagement must not be able to hand out work.
+    # This is the enforcement point described in scripts/lib/engagement_lock.sh.
+    require_unlocked "$(engagement_dir_from_db "$DB")" "fetch (${AGENT}, type=${TYPE})"
 
     # Escape single quotes for SQL safety
     TYPE="${TYPE//\'/\'\'}"
@@ -403,6 +435,9 @@ case "$ACTION" in
     TYPE="${4:?Missing type argument}"
     LIMIT="${5:?Missing limit argument}"
     AGENT="${6:?Missing agent argument}"
+
+    # Stop-lock gate (same enforcement point as the legacy fetch path).
+    require_unlocked "$(engagement_dir_from_db "$DB")" "fetch-by-stage (${AGENT}, stage=${STAGE}, type=${TYPE})"
 
     if ! _validate_stage "$STAGE"; then
       exit 1

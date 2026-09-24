@@ -30,3 +30,8 @@ flowdeck.log
 # Python bytecode (jamais versionné)
 __pycache__/
 *.pyc
+
+# Données d'engagements actifs et bases de cas locales
+cases.db
+engagements/
+.openchamber-extension/

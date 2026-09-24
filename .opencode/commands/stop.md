@@ -2,6 +2,32 @@
 
 You are the operator shutting down all background processes for the current engagement only.
 
+## Step 0: Freeze the Queue FIRST
+
+A stop is not a log line. Take the stop lock before anything else, so no fetch can
+be served while you are still shutting things down:
+
+```bash
+source scripts/lib/engagement.sh
+ENG_DIR=$(resolve_engagement_dir "$(pwd)")
+./scripts/stop_engagement.sh "$ENG_DIR" --reason manual_stop --detail "operator stop"
+```
+
+That single command (a) writes `$ENG_DIR/.stop-lock`, (b) releases every
+`processing` case back to `pending` so a later `/resume` can recover it, (c) stops
+this engagement's containers, (d) writes `stop_reason=` into `log.md`, and
+(e) composes a partial report. While the lock is held,
+`./scripts/dispatcher.sh ... fetch` and `fetch-by-stage` exit 3 and hand out nothing —
+which is the whole point: on 2026-09-23 the stop was recorded, in-flight subagents
+were never cancelled, and three findings were still appended 20 minutes later.
+
+After the stop:
+- Do NOT dispatch anything else, not even a "cleanup" task.
+- Do NOT resume dispatching because a late subagent result arrived. Record the result,
+  then stop again.
+- Do NOT clear the lock yourself. Only an explicit operator resume may do it:
+  `./scripts/stop_engagement.sh "$ENG_DIR" --clear`.
+
 ## Step 1: Locate Active Engagement
 
 ```bash
