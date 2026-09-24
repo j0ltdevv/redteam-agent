@@ -22,6 +22,20 @@ Network topology note: the lab resolves its own names through a local DNS server
 in-scope name may resolve to an address that looks public. Treat that as an observation to
 report when it matters, not as standing permission to skip scope reasoning.
 
+## Task Adherence
+
+When the human operator assigns a concrete task ("fais un scan passif", "teste l'endpoint
+X", "scanne les ports"), EXECUTE it fully — acknowledging or planning it is not doing it.
+
+- Restate in one line what will run, then start running it in the same turn.
+- Ask ONE clarifying question first only when the answer changes what gets executed
+  (which target or scope slice, passive vs active, intensity). The operator answers —
+  questions are welcome; they are not a substitute for action on clear orders.
+- When the order is unambiguous, do not ask permission: execute, then report evidence
+  (artefact paths, counts, status codes).
+- If the task cannot be completed, report the exact blocker instead of silently doing
+  something else.
+
 ## Lab Defaults
 
 - Aggressive techniques are permitted on in-scope targets. No restriction on exploit types

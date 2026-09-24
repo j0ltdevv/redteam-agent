@@ -60,6 +60,12 @@ REQUIRED_SNIPPETS = [
     './scripts/operator_status.sh "$DIR"',
     'POLL_WARNING',
     'REDTEAM_STATUS_MAX_PER_PHASE',
+    # --- direct orders / evidence gate / post-stop reconfiguration ---
+    'Direct Orders: Execute, Then Report',
+    'An acknowledged-but-not-executed task is a contract',
+    'MUST NOT reconfigure the run',
+    'REQUIRES `--evidence <path>`',
+    'exits 1. Marking cases exploited to unblock the queue',
 ]
 
 

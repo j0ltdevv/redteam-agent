@@ -58,6 +58,26 @@ After `/engage` initialization completes, repeat until all attack paths exhauste
 7. **RECORD SURFACES IMMEDIATELY** — If recon/source output `#### Surface Candidates`, write that JSONL block to a file and ingest it with `./scripts/append_surface_jsonl.sh "$DIR" < "$SURFACE_FILE"`. Use `./scripts/append_surface.sh "$DIR" <surface_type> <target> <source> <rationale> [evidence_ref] [status]` only for one-off manual updates; `status` is ALWAYS the final argument. Surface targets must stay concrete and requestable after normalization: replace unknown query values with `...` when needed, but do NOT emit unresolved path placeholders such as `<id>`, `{id}`, `FUZZ`, `PARAM`, or `{{token}}` into `surfaces.jsonl`. If only a route family is known, keep it in notes/rationale and requeue a concrete follow-up instead of ingesting a placeholder surface.
 8. **LOOP** — Back to step 1.
 
+## Direct Orders: Execute, Then Report
+
+When the operator assigns a concrete task ("fais un scan passif", "teste l'endpoint X",
+"scanne les ports de la cible"), the only outcome that counts is an EXECUTED task:
+
+1. Restate in ONE line what exactly will run (tool, scope, passive/active), then start
+   running it in the SAME turn. An acknowledged-but-not-executed task is a contract
+   violation, same class as idle-with-work-pending.
+2. Clarifying questions are allowed — and expected — when the answer changes what gets
+   executed (which target or scope slice, passive vs active, intensity, timing). Ask at
+   most ONE question with concrete options BEFORE the first tool call; the operator
+   answers. Do not stack questionnaires, and never use a question as a stall.
+3. When the order is unambiguous, do NOT ask "shall I proceed?" — execute and report
+   evidence: artefact paths under `$DIR`, case counts, HTTP status differentials.
+4. If the task cannot be completed (missing tool, blocked scope, target too ambiguous
+   even for a question), report the exact blocker instead of silently substituting a
+   different task.
+5. Completion report: what ran, what it produced (paths), what changed in the queue.
+   A task is never "done" without its artefact on disk.
+
 ## Output Token Management
 
 - Do ONE advancing unit per response, then immediately continue.
@@ -204,6 +224,11 @@ Rules:
   --reason manual_stop` in the SAME turn you acknowledge the stop, and never dispatch
   anything after it. If a subagent result lands after the stop, record it and stop again —
   do not treat it as a reason to resume dispatching.
+- While the stop lock is held you MUST NOT reconfigure the run: no concurrency bumps,
+  no "aggressive mode", no fallback/budget/mode changes. Observed on 2026-09-23: eight
+  minutes after a manual stop the run relaunched itself at `max_concurrent=6` instead of
+  staying stopped — post-stop self-reconfiguration is itself a contract violation. The
+  only path back to work is an explicit operator `/resume`, which clears the lock first.
 
 > **Lifecycle decisions** (creating, merging, retiring, or activating a ghost
 > subagent) follow `docs/subagent-lifecycle.md`. Read it before changing
@@ -258,6 +283,14 @@ ERROR                        case=NN  (irrecoverable; terminal until retry-error
 ```
 
 The operator translates these into `dispatcher.sh ... done <id> --stage <stage>` calls. Without an explicit STAGE marker, treat as legacy `done` (stage unchanged) and log a contract warning — eventually subagents must always emit STAGE.
+
+When the target stage is `exploited`, the dispatcher REQUIRES `--evidence <path>`: a
+non-empty artefact inside `$DIR` that proves the exploit (the subagent's evidence path
+from its Findings draft — `$DIR/scans/finding-<slug>.json`, `$DIR/scans/<case>-<slug>.md`
+or `$DIR/downloads/<slug>.body`). `done <id> --stage exploited` without `--evidence`
+exits 1. Marking cases exploited to unblock the queue is a contract violation — it
+corrupts the report and the recall gate (observed on 2026-09-23: three cases marked
+exploited with no exploit work after a policy block).
 
 ### Rule 3 — phases are now derived labels
 
