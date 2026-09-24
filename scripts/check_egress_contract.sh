@@ -14,9 +14,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 PASS=0
 FAIL=0
+WARN=0
 
-ok()  { PASS=$((PASS + 1)); echo "[OK]   $1"; }
-bad() { FAIL=$((FAIL + 1)); echo "[FAIL] $1"; }
+ok()   { PASS=$((PASS + 1)); echo "[OK]   $1"; }
+bad()  { FAIL=$((FAIL + 1)); echo "[FAIL] $1"; }
+warn() { WARN=$((WARN + 1)); echo "[WARN] $1"; }
 
 # --- 1. tor-wrap.sh : fail-closed sans VPN, bypass via RT_ALLOW_DIRECT -------
 STUB_DIR="$(mktemp -d)"
@@ -75,14 +77,19 @@ else
     ok "start-redteam.sh has no orphan start_host_tor call"
 fi
 
-# --- 4. kill-switch Windscribe ----------------------------------------------
+# --- 4. kill-switch Windscribe (drift-aware) --------------------------------
+# NOTE : windscribe_cli.conf est RÉGÉNÉRÉ par l'app depuis son état interne.
+# Un FirewallMode=Always écrit à la main est écrasé au prochain démarrage de
+# l'app (constaté le 2026-09-24 : le log a dit « Set firewall on boot: false »).
+# Le kill switch permanent se règle DANS L'APP ; ce test ne fait que constater.
 WS_CONF="$HOME/.config/Windscribe/windscribe_cli.conf"
 if [ -f "$WS_CONF" ]
 then
     fw_mode="$(grep -E '^FirewallMode=' "$WS_CONF" 2>/dev/null | cut -d= -f2 || true)"
     case "$fw_mode" in
-        Always|Auto) ok "Windscribe kill-switch configured (FirewallMode=$fw_mode)" ;;
-        *)           bad "Windscribe kill-switch disabled or unknown (FirewallMode=${fw_mode:-absent})" ;;
+        Always) ok "Windscribe kill-switch permanent (FirewallMode=Always)" ;;
+        Auto)   warn "Windscribe kill-switch = Auto : armé SEULEMENT quand connecté (à passer en 'Always' DANS L'APP — le fichier est écrasé)" ;;
+        *)      bad "Windscribe kill-switch disabled or unknown (FirewallMode=${fw_mode:-absent})" ;;
     esac
 else
     bad "windscribe_cli.conf missing"
@@ -180,6 +187,14 @@ else
     bad "niri Ctrl+Shift+O bind missing"
 fi
 
+# --- 9. helper vpn-up.sh (montage du tunnel + contrôle d'egress) ------------
+if [ -x "$REPO_DIR/scripts/vpn-up.sh" ] && bash -n "$REPO_DIR/scripts/vpn-up.sh" 2>/dev/null
+then
+    ok "vpn-up.sh present and syntax-valid"
+else
+    bad "vpn-up.sh missing or invalid"
+fi
+
 echo
-echo "passed=$PASS failed=$FAIL"
+echo "passed=$PASS failed=$FAIL warnings=$WARN"
 [ "$FAIL" -eq 0 ]
