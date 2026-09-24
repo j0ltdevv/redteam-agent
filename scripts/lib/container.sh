@@ -7,6 +7,27 @@ CONTAINER_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=/dev/null
 . "$CONTAINER_LIB_DIR/noise.sh"
 
+# --- Egress mode: VPN par défaut, Tor en opt-in (2026-09-24) -----------------
+# RT_USE_TOR=1 → les conteneurs sortent via redteam-tor-gateway:9050 (historique).
+# défaut       → aucun proxy injecté : le trafic conteneur suit la route par
+#                défaut de l'hôte, c.-à-d. le tunnel VPN Windscribe
+#                (kill-switch FirewallMode=Always).
+egress_proxy_flags() {
+    if [ "${RT_USE_TOR:-0}" = "1" ]; then
+        echo "-e ALL_PROXY=socks5h://redteam-tor-gateway:9050 -e HTTP_PROXY=socks5h://redteam-tor-gateway:9050 -e HTTPS_PROXY=socks5h://redteam-tor-gateway:9050"
+    fi
+}
+
+# DNS : en mode Tor on garde le resolver du gateway (127.0.0.1) ; en mode VPN on
+# laisse le DNS Docker par défaut (-> /etc/resolv.conf de l'hôte -> resolver
+# Windscribe via le tunnel). Forcer 127.0.0.1 en mode VPN casserait la résolution.
+egress_dns_flags() {
+    if [ "${RT_USE_TOR:-0}" = "1" ]; then
+        echo "--dns 127.0.0.1"
+    fi
+}
+
+
 REDTEAM_IMAGE="${REDTEAM_IMAGE:-kali-redteam:latest}"
 PROXY_IMAGE="${PROXY_IMAGE:-redteam-proxy:latest}"
 KATANA_IMAGE="${KATANA_IMAGE:-projectdiscovery/katana:latest}"
@@ -412,13 +433,12 @@ run_tool() {
         return
     fi
     # Build docker args array to avoid word-splitting issues
-    # NOTE: --network host has been replaced with redteam-tor-net to force all traffic through Tor.
+    # NOTE: --network host a été remplacé par redteam-tor-net. L'egress dépend
+    # de RT_USE_TOR (cf. egress_proxy_flags) : VPN hôte par défaut, Tor opt-in.
     # Loopback access is handled via host.docker.internal (Docker DNS alias) when needed.
     local docker_args=(--rm --network redteam-tor-net -v "${ENGAGEMENT_DIR_ABS}:/engagement" -w /engagement
-        --dns 127.0.0.1
-        -e ALL_PROXY=socks5h://redteam-tor-gateway:9050
-        -e HTTP_PROXY=socks5h://redteam-tor-gateway:9050
-        -e HTTPS_PROXY=socks5h://redteam-tor-gateway:9050
+        $(egress_dns_flags)
+        $(egress_proxy_flags)
         -e no_proxy=localhost,127.0.0.1,::1,host.docker.internal
     )
     # Mount .env file if it exists (provides API keys for subfinder, nuclei, etc.)
@@ -455,10 +475,8 @@ start_proxy() {
     fi
     docker run -d --name "$container_name" \
         --network redteam-tor-net \
-        --dns 127.0.0.1 \
-        -e ALL_PROXY=socks5h://redteam-tor-gateway:9050 \
-        -e HTTP_PROXY=socks5h://redteam-tor-gateway:9050 \
-        -e HTTPS_PROXY=socks5h://redteam-tor-gateway:9050 \
+        $(egress_dns_flags) \
+        $(egress_proxy_flags) \
         -e no_proxy=localhost,127.0.0.1,::1,host.docker.internal \
         -v "${ENGAGEMENT_DIR_ABS}:/engagement" \
         -p "127.0.0.1:${MITMPROXY_PORT:-8080}:8080" \
@@ -602,10 +620,8 @@ start_katana() {
 
     docker run -d --name "$container_name" \
         --network redteam-tor-net \
-        --dns 127.0.0.1 \
-        -e ALL_PROXY=socks5h://redteam-tor-gateway:9050 \
-        -e HTTP_PROXY=socks5h://redteam-tor-gateway:9050 \
-        -e HTTPS_PROXY=socks5h://redteam-tor-gateway:9050 \
+        $(egress_dns_flags) \
+        $(egress_proxy_flags) \
         -e no_proxy=localhost,127.0.0.1,::1,host.docker.internal \
         -v "${ENGAGEMENT_DIR_ABS}:/engagement" \
         "$KATANA_IMAGE" \

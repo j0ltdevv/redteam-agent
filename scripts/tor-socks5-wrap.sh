@@ -1,57 +1,52 @@
 #!/usr/bin/env bash
-# Route un binaire vers le SOCKS5 Tor via env HTTP(S)_PROXY.
+# Route un binaire vers la sortie reseau (VPN mode).
 #
+# VPN-ONLY (2026-09-24) : Tor n'est plus exige. Le trafic herite de la route
+# VPN hote (Windscribe, kill-switch ON). Voir tor-wrap.sh pour le contrat
+# fail-closed complet (RT_USE_TOR=1 pour l'opt-in Tor historique).
 # Pourquoi pas proxychains : les binaires Go (nuclei-mcp) ne passent pas par
-# libc connect() — LD_PRELOAD/proxychains est inopérant dessus. Le seul levier
-# fiable est HTTP_PROXY/HTTPS_PROXY (scheme "socks5" supporté par net/http,
-# résolution DNS distante faite par le dialer socks côté proxy).
+# libc connect() -- LD_PRELOAD/proxychains est inoperant dessus.
 #
-# Fail-closed (même contrat que tor-wrap.sh) : si 127.0.0.1:9050 est injoignable,
-# refuse de lancer (exit 1) sauf RT_ALLOW_DIRECT=1 (warning logged).
+# Fail-closed : si le VPN est coupe, refuse de lancer (exit 1)
+# sauf RT_ALLOW_DIRECT=1 (warning logged).
 #
-# Usage: tor-socks5-wrap.sh <command> [args…]
+# Usage: tor-socks5-wrap.sh <command> [args...]
 # Env:   RT_ALLOW_DIRECT=1  # opt-out explicite du fail-closed (logged)
 set -euo pipefail
 
 if [ "$#" -eq "0" ]
 then
-    echo "[tor-socks5-wrap] ERROR: usage: tor-socks5-wrap.sh <command> [args…]" >&2
+    echo "[egress] ERROR: usage: tor-socks5-wrap.sh <command> [args...]" >&2
     exit 2
 fi
 
-# socks5:// pour Go (HTTP(S)_PROXY) ; socks5h:// pour ALL_PROXY (curl et
-# compagnie résolvent en local sinon = fuite DNS).
-SOCKS5="socks5://127.0.0.1:9050"
-SOCKS5H="socks5h://127.0.0.1:9050"
-
-socks_up() {
-    # Test de connectivité réel (le port doit accepter la connexion).
-    (exec 3<>"/dev/tcp/127.0.0.1/9050") >/dev/null 2>&1
+vpn_up() {
+    if command -v windscribe-cli >/dev/null 2>&1
+    then
+        windscribe-cli status 2>/dev/null | grep -qiE "connecte|connected" \
+            && ! windscribe-cli status 2>/dev/null | grep -qiE "coupe|disconnected"
+    else
+        return 1
+    fi
 }
 
-route_via_tor() {
-    export HTTP_PROXY="$SOCKS5"
-    export HTTPS_PROXY="$SOCKS5"
-    export http_proxy="$SOCKS5"
-    export https_proxy="$SOCKS5"
-    export ALL_PROXY="$SOCKS5H"
-    export all_proxy="$SOCKS5H"
+route_via_vpn() {
     export NO_PROXY="localhost,127.0.0.1,::1"
     export no_proxy="localhost,127.0.0.1,::1"
-    echo "[tor-socks5-wrap] Routing through Tor ($SOCKS5)" >&2
+    echo "[egress] Routing through host VPN (kill-switch ON expected)" >&2
 }
 
-if socks_up
+if vpn_up
 then
-    route_via_tor
+    route_via_vpn
     exec "$@"
 fi
 
 if [ "${RT_ALLOW_DIRECT:-0}" = "1" ]
 then
-    echo "[tor-socks5-wrap] WARNING: Tor SOCKS5 unreachable on 127.0.0.1:9050, RT_ALLOW_DIRECT=1 set, running WITHOUT Tor isolation" >&2
+    echo "[egress] WARNING: VPN disconnected, RT_ALLOW_DIRECT=1 set, running WITHOUT egress isolation" >&2
     exec "$@"
 fi
 
-echo "[tor-socks5-wrap] ERROR: Tor SOCKS5 unreachable on 127.0.0.1:9050 (start redteam-tor-gateway: docker compose up -d tor-gateway), or set RT_ALLOW_DIRECT=1 explicitly to bypass" >&2
+echo "[egress] ERROR: no VPN connection detected (windscribe-cli: disconnected), or set RT_ALLOW_DIRECT=1 explicitly to bypass" >&2
 exit 1

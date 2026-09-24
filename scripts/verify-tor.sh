@@ -21,39 +21,75 @@ warn() {
 ERRORS=0
 
 echo "============================================"
-echo "  Tor Isolation Verification"
+echo "  Egress Isolation Verification"
 echo "============================================"
 echo ""
 
-# 1. Check tor-gateway container is running
-if docker ps --format "{{.Names}}" 2>/dev/null | grep -q "^redteam-tor-gateway$"
+# 1. Sortie réseau : VPN hôte (défaut) ou Tor (opt-in RT_USE_TOR=1)
+if [ "${RT_USE_TOR:-0}" = "1" ]
 then
-    ok "redteam-tor-gateway container is running"
+    echo "  Mode sortie : Tor (RT_USE_TOR=1)"
+
+    # 1a. Check tor-gateway container is running
+    if docker ps --format "{{.Names}}" 2>/dev/null | grep -q "^redteam-tor-gateway$"
+    then
+        ok "redteam-tor-gateway container is running"
+    else
+        fail "redteam-tor-gateway container is NOT running"
+        ERRORS=$((ERRORS + 1))
+    fi
+
+    # 1b. Check Tor is bootstrapped inside the gateway
+    echo -n "  Checking Tor bootstrap... "
+    if docker exec redteam-tor-gateway curl -s --socks5 "127.0.0.1:9050" "https://check.torproject.org/api/ip" 2>/dev/null | grep -q "IsTor.:true"
+    then
+        ok "Tor is bootstrapped and working"
+    else
+        fail "Tor is NOT bootstrapped inside the gateway"
+        ERRORS=$((ERRORS + 1))
+    fi
+
+    # 1c. Check host Tor (should also work)
+    echo -n "  Checking host Tor... "
+    if curl -s --socks5-hostname "127.0.0.1:9050" "https://check.torproject.org/api/ip" 2>/dev/null | grep -q "IsTor.:true"
+    then
+        ok "Host Tor is working"
+    else
+        warn "Host Tor is not available (not critical if gateway works)"
+    fi
 else
-    fail "redteam-tor-gateway container is NOT running"
-    ERRORS=$((ERRORS + 1))
+    echo "  Mode sortie : VPN hôte (Windscribe) — Tor désactivé"
+
+    echo -n "  Checking host VPN... "
+    VPN_STATUS="$(windscribe-cli status 2>/dev/null || echo "")"
+    if echo "$VPN_STATUS" | grep -qiE "connecte|connected" && ! echo "$VPN_STATUS" | grep -qiE "coupe|disconnected"
+    then
+        EGRESS_IP="$(curl -s --max-time 8 https://api.ipify.org 2>/dev/null || echo "?")"
+        ok "VPN connected — egress IP: $EGRESS_IP"
+    elif [ "${RT_ALLOW_DIRECT:-0}" = "1" ]
+    then
+        warn "VPN disconnected but RT_ALLOW_DIRECT=1 (explicit bypass, NO isolation)"
+    else
+        fail "VPN disconnected — egress is NOT isolated"
+        ERRORS=$((ERRORS + 1))
+    fi
+
+    echo -n "  Checking kill-switch... "
+    WS_CONF="$HOME/.config/Windscribe/windscribe_cli.conf"
+    FW_MODE="$(grep -E '^FirewallMode=' "$WS_CONF" 2>/dev/null | cut -d= -f2 || echo "")"
+    case "$FW_MODE" in
+        Always) ok "kill-switch armed permanently (FirewallMode=Always)" ;;
+        Auto)   warn "kill-switch only while connected (FirewallMode=Auto)" ;;
+        Off)    fail "kill-switch DISABLED (FirewallMode=Off)" ; ERRORS=$((ERRORS + 1)) ;;
+        *)      warn "kill-switch state unknown (FirewallMode=${FW_MODE:-absent})" ;;
+    esac
+
+    echo "  [SKIP] Tor checks skipped (VPN mode) — RT_USE_TOR=1 to verify Tor"
 fi
 
-# 2. Check Tor is bootstrapped inside the gateway
-echo -n "  Checking Tor bootstrap... "
-if docker exec redteam-tor-gateway curl -s --socks5 "127.0.0.1:9050" "https://check.torproject.org/api/ip" 2>/dev/null | grep -q "\"IsTor\":true"
+# 4. Check each container exits through Tor (Tor mode only)
+if [ "${RT_USE_TOR:-0}" = "1" ]
 then
-    ok "Tor is bootstrapped and working"
-else
-    fail "Tor is NOT bootstrapped inside the gateway"
-    ERRORS=$((ERRORS + 1))
-fi
-
-# 3. Check host Tor (should also work)
-echo -n "  Checking host Tor... "
-if curl -s --socks5-hostname "127.0.0.1:9050" "https://check.torproject.org/api/ip" 2>/dev/null | grep -q "\"IsTor\":true"
-then
-    ok "Host Tor is working"
-else
-    warn "Host Tor is not available (not critical if gateway works)"
-fi
-
-# 4. Check each container exits through Tor
 for container in kali-redteam redteam-proxy redteam-metasploit
 do
     echo -n "  Checking $container... "
@@ -78,6 +114,7 @@ do
         warn "$container is not running (skipped)"
     fi
 done
+fi
 
 # 5. Check .env permissions
 echo -n "  Checking .env permissions... "
@@ -106,8 +143,8 @@ else
     ERRORS=$((ERRORS + 1))
 fi
 
-# 7. Check tor-wrap.sh is fail-closed (refuses without proxy)
-echo -n "  Checking tor-wrap fail-closed... "
+# 7. Check tor-wrap.sh is fail-closed (refuses without VPN/proxy)
+echo -n "  Checking egress wrap fail-closed... "
 SCRIPT_DIR=$(dirname "$0" || echo ".")
 WRAP_SCRIPT="$SCRIPT_DIR/tor-wrap.sh"
 STUB_DIR=$(mktemp -d 2>/dev/null || echo "")
@@ -116,17 +153,17 @@ then
     fail "cannot create stub dir for fail-closed check"
     ERRORS=$((ERRORS + 1))
 else
-    for stub in docker ss
+    for stub in docker ss windscribe-cli
     do
         printf "#!/usr/bin/env bash\nexit 0\n" > "$STUB_DIR/$stub" || echo ""
         chmod +x "$STUB_DIR/$stub" || echo ""
     done
     if PATH="$STUB_DIR:/usr/bin:/bin" "$WRAP_SCRIPT" "true" 2>/dev/null
     then
-        fail "tor-wrap.sh is fail-open (ran without proxy)"
+        fail "tor-wrap.sh is fail-open (ran without VPN/proxy)"
         ERRORS=$((ERRORS + 1))
     else
-        ok "tor-wrap.sh is fail-closed (refuses without proxy)"
+        ok "tor-wrap.sh is fail-closed (refuses without VPN/proxy)"
     fi
     if PATH="$STUB_DIR:/usr/bin:/bin" RT_ALLOW_DIRECT="1" "$WRAP_SCRIPT" "true" 2>/dev/null
     then
@@ -220,7 +257,7 @@ echo ""
 echo "============================================"
 if [ $ERRORS -eq 0 ]
 then
-    echo -e "${GREEN}All checks passed. Traffic is isolated through Tor.${NC}"
+    echo -e "${GREEN}All checks passed. Egress isolation is verified.${NC}"
 else
     echo -e "${RED}${ERRORS} check(s) failed. Review above.${NC}"
 fi

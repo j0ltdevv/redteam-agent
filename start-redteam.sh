@@ -67,26 +67,41 @@ check_prereqs() {
   fi
 }
 
-# --- 1. Daemon Tor hôte ------------------------------------------------------
-start_host_tor() {
-  echo -e "\n${BOLD}▸ Daemon Tor (hôte)${NC}"
-  if ss -tln 2>/dev/null | grep -q ":9050 "; then
-    ok "Tor déjà en écoute sur 127.0.0.1:9050"
+# --- 1. VPN hôte (Windscribe, kill-switch) -------------------------------------
+# VPN-ONLY (2026-09-24) : Tor n'est plus la sortie par défaut (exits bloquées
+# par les WAF). La sortie passe par Windscribe avec kill-switch ON.
+# NE CONNECTE PAS : le script vérifie seulement. L'utilisateur connecte lui-même
+# (windscribe-cli connect) — une connexion auto casserait sa session réseau.
+check_host_vpn() {
+  echo -e "\n${BOLD}▸ VPN hôte (Windscribe)${NC}"
+  if ! command -v windscribe-cli >/dev/null 2>&1; then
+    warn "windscribe-cli absent — sortie non isolée"
+    return 0
+  fi
+  local st
+  st=$(windscribe-cli status 2>/dev/null || true)
+  if echo "$st" | grep -qiE "connecté|connected" && ! echo "$st" | grep -qiE "coupé|disconnected"; then
+    local ip
+    ip=$(curl -s --max-time 8 https://api.ipify.org 2>/dev/null || echo "?")
+    ok "VPN connecté — IP de sortie: $ip"
   else
-    info "Démarrage de tor..."
-    if systemctl start tor 2>/dev/null; then
-      ok "tor démarré via systemctl"
-    elif command -v tor >/dev/null 2>&1; then
-      nohup tor >/dev/null 2>&1 &
-      sleep 3
-      if port_up 9050; then
-        ok "tor démarré en arrière-plan"
-      else
-        warn "tor ne répond pas sur :9050 — continuons quand même"
-      fi
-    else
-      warn "tor non installé sur l'hôte (le conteneur Tor gateway fait le travail)"
-    fi
+    warn "VPN coupé — connecte-toi toi-même: windscribe-cli connect"
+    warn "(les scripts refuseront de tourner sans VPN, sauf RT_ALLOW_DIRECT=1)"
+  fi
+  # Kill-switch : FirewallMode=Always (armé même VPN coupé) + FirewallWhen=Before Connection
+  # dans ~/.config/Windscribe/windscribe_cli.conf.
+  local ws_conf="$HOME/.config/Windscribe/windscribe_cli.conf"
+  local fw_mode fw_when
+  fw_mode=$(grep -E '^FirewallMode=' "$ws_conf" 2>/dev/null | cut -d= -f2 || true)
+  fw_when=$(grep -E '^FirewallWhen=' "$ws_conf" 2>/dev/null | cut -d= -f2 || true)
+  case "$fw_mode" in
+    Always) ok "Kill-switch armé en permanence (FirewallMode=Always)" ;;
+    Auto)   warn "Kill-switch armé seulement connecté (FirewallMode=Auto) — Always recommandé" ;;
+    Off|"") warn "Kill-switch DÉSACTIVÉ (FirewallMode=${fw_mode:-absent}) — fuite possible hors VPN" ;;
+    *)      warn "Kill-switch: FirewallMode=$fw_mode (inconnu)" ;;
+  esac
+  if [ -n "$fw_when" ]; then
+    info "FirewallWhen=$fw_when"
   fi
 }
 
@@ -260,8 +275,13 @@ main() {
     start|*)
       banner
       check_prereqs
-      start_host_tor
-      start_tor_gateway
+      check_host_vpn
+      if [ "${RT_USE_TOR:-0}" = "1" ]; then
+        start_tor_gateway
+      else
+        echo -e "\n${BOLD}▸ Conteneur Tor Gateway${NC}"
+        info "Tor désactivé (défaut) — sortie via VPN hôte. Opt-in: RT_USE_TOR=1"
+      fi
       check_images
       check_env
       check_network
