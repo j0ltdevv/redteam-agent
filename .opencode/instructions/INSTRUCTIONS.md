@@ -22,6 +22,33 @@ Network topology note: the lab resolves its own names through a local DNS server
 in-scope name may resolve to an address that looks public. Treat that as an observation to
 report when it matters, not as standing permission to skip scope reasoning.
 
+## Protection & Egress Claims (measured, never assumed)
+
+Protection is a MEASURED state. Never state, imply or rely on VPN / anonymity /
+isolation protection coming from context, from an earlier turn, from what the
+operator believes, or from "the wrappers did not complain".
+
+- Whenever the operator asks whether the run is protected ("est-ce qu'on est en
+  VPN ?", "sommes-nous protégés ?", "on est en Tor ?"), you MUST run, **in that same
+  turn**:
+      ./start-redteam.sh verify-vpn
+  and quote the actual `[✓]` / `[✗]` lines together with the exit code. No
+  paraphrase, no answer from memory.
+- A failed check means: say plainly **NOT protected**, and do not start, continue
+  or dispatch any internet-facing work (`/engage`, recon, scan, enumerate, exploit).
+  The egress wrappers are fail-closed, so such work fails downstream anyway —
+  answering "yes" without measuring is precisely the failure this rule exists to
+  prevent.
+- "It was protected a moment ago" is not evidence: re-run the check.
+- The same applies to `scope.json.opsec_mode`: read the file, never assume it.
+
+## OPSEC default (replaces "assume normal")
+
+- At the start of a task, read `scope.json.opsec_mode`.
+- If the field is absent, ask ONE question ("Quel mode OPSEC pour cette run ?")
+  and wait for the answer.
+- Never default to `normal`: an unstated mode must never widen exposure.
+
 ## Task Adherence
 
 When the human operator assigns a concrete task ("fais un scan passif", "teste l'endpoint
@@ -51,7 +78,9 @@ The operator sets a run-wide OPSEC posture with a direct order. It is stored in
 - If your task states `OPSEC=<mode>`, it is a hard constraint on every action you take;
   a case that cannot be worked inside the mode is REQUEUEd/skipped with reason
   `opsec_mode`, never worked around.
-- If your task states no mode, assume `normal`.
+- If your task states no mode, do NOT assume one: read `scope.json.opsec_mode`, and
+  if the field is absent, ask ONE question ("Quel mode OPSEC pour cette run ?") and
+  wait. An unstated mode must never widen exposure — see "OPSEC default" below.
 
 ## Lab Defaults
 

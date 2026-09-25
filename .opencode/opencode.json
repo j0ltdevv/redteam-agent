@@ -50,7 +50,7 @@
     // T15 shell-strategy : règles bash non-interactives (pas de -i, sudo -n, BatchMode SSH).
     // NB : `instructions` est config-level -> s'applique à TOUS les agents du profil redteam,
     // impossible de le limiter au seul copilot.
-    "https://raw.githubusercontent.com/JRedeker/opencode-shell-strategy/trunk/shell_strategy.md"
+    ".opencode/instructions/shell_strategy.md"
   ],
   "plugin": [
     "./plugins",
