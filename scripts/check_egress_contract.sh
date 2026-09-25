@@ -15,10 +15,25 @@ REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 PASS=0
 FAIL=0
 WARN=0
+SKIP=0
 
 ok()   { PASS=$((PASS + 1)); echo "[OK]   $1"; }
 bad()  { FAIL=$((FAIL + 1)); echo "[FAIL] $1"; }
 warn() { WARN=$((WARN + 1)); echo "[WARN] $1"; }
+skip() { SKIP=$((SKIP + 1)); echo "[SKIP] $1"; }
+
+# --- tunnel reel dans l'environnement ? --------------------------------------
+# Les deux assertions "fail-closed" simulent l'absence de VPN en stubbant
+# windscribe-cli / docker / ss. Elles ne sont PAS reproductibles quand un
+# tunnel reel existe deja (bulle pentest : wg0 + handshake + sondage qui
+# repondent — aucun stub ne peut les neutraliser). Dans ce cas on saute plutot
+# que de produire un faux FAIL : la regle reste couverte par l'execution de ce
+# test SUR LE PC (hors bulle), ou elle donne passed=15 failed=0.
+REAL_TUNNEL=0
+if bash -c ". \"$REPO_DIR/scripts/lib/vpn_state.sh\"; rt_wg_manual_up" 2>/dev/null
+then
+    REAL_TUNNEL=1
+fi
 
 # --- 1. tor-wrap.sh : fail-closed sans VPN, bypass via RT_ALLOW_DIRECT -------
 STUB_DIR="$(mktemp -d)"
@@ -27,7 +42,10 @@ do
     printf '#!/usr/bin/env bash\nexit 0\n' > "$STUB_DIR/$stub"
     chmod +x "$STUB_DIR/$stub"
 done
-if PATH="$STUB_DIR:/usr/bin:/bin" "$REPO_DIR/scripts/tor-wrap.sh" true >/dev/null 2>&1
+if [ "$REAL_TUNNEL" = "1" ]
+then
+    skip "tor-wrap.sh fail-closed : tunnel reel present (reponse valable hors bulle)"
+elif PATH="$STUB_DIR:/usr/bin:/bin" "$REPO_DIR/scripts/tor-wrap.sh" true >/dev/null 2>&1
 then
     bad "tor-wrap.sh is fail-open (ran without VPN)"
 else
@@ -105,7 +123,10 @@ done
 printf '#!/usr/bin/env bash\necho "$@"\n' > "$STUB2/npx"
 chmod +x "$STUB2/npx"
 
-if PATH="$STUB2:/usr/bin:/bin" "$REPO_DIR/scripts/egress-wrap.sh" true >/dev/null 2>&1
+if [ "$REAL_TUNNEL" = "1" ]
+then
+    skip "egress-wrap.sh fail-closed : tunnel reel present (reponse valable hors bulle)"
+elif PATH="$STUB2:/usr/bin:/bin" "$REPO_DIR/scripts/egress-wrap.sh" true >/dev/null 2>&1
 then
     bad "egress-wrap.sh is fail-open (ran without VPN)"
 else
@@ -196,5 +217,5 @@ else
 fi
 
 echo
-echo "passed=$PASS failed=$FAIL warnings=$WARN"
+echo "passed=$PASS failed=$FAIL warnings=$WARN skipped=$SKIP"
 [ "$FAIL" -eq 0 ]

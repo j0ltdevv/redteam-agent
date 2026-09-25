@@ -35,3 +35,6 @@ __pycache__/
 cases.db
 engagements/
 .openchamber-extension/
+
+# Sauvegarde locale agent (ne jamais versionner)
+.backup-cline-*/

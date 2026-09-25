@@ -15,6 +15,7 @@
 #    ./start-redteam.sh stop     → arrête la stack Tor + conteneurs
 #    ./start-redteam.sh status   → affiche l'état
 #    ./start-redteam.sh verify   → vérifie l'isolation Tor
+#    ./start-redteam.sh verify-vpn → contrôle egress VPN (IP/org, fuite IPv6, kill-switch)
 # ============================================================================
 set -euo pipefail
 
@@ -72,18 +73,35 @@ check_prereqs() {
 # par les WAF). La sortie passe par Windscribe avec kill-switch ON.
 # NE CONNECTE PAS : le script vérifie seulement. L'utilisateur connecte lui-même
 # (windscribe-cli connect) — une connexion auto casserait sa session réseau.
+# Durci (2026-09-25) : détection via scripts/lib/vpn_state.sh — état CLI
+# (dernière ligne "État de connexion") ET preuve matérielle de tunnel
+# (iface tun/wg/ppp ou xfrm). Le faux "Connecté" du CLI a déjà causé une
+# fuite en clair (Free Mobile) ; en plus l'appartenance de l'IP de sortie à
+# Windscribe est vérifiée. Cibles internet => fail-closed (voir main).
 check_host_vpn() {
   echo -e "\n${BOLD}▸ VPN hôte (Windscribe)${NC}"
   if ! command -v windscribe-cli >/dev/null 2>&1; then
     warn "windscribe-cli absent — sortie non isolée"
     return 0
   fi
-  local st
-  st=$(windscribe-cli status 2>/dev/null || true)
-  if echo "$st" | grep -qiE "connecté|connected" && ! echo "$st" | grep -qiE "coupé|disconnected"; then
-    local ip
-    ip=$(curl -s --max-time 8 https://api.ipify.org 2>/dev/null || echo "?")
-    ok "VPN connecté — IP de sortie: $ip"
+  # shellcheck source=/dev/null
+  . "$REDTEAM_DIR/scripts/lib/vpn_state.sh"
+  if rt_vpn_up; then
+    local ip org
+    ip=$(rt_exit_ip)
+    org=$(rt_exit_ip_org)
+    ok "VPN connecté (CLI + tunnel matériel) — IP de sortie: ${ip:-?}"
+    case "$org" in
+      *Windscribe*|*windscribe*) ok "IP de sortie bien chez Windscribe [$org]" ;;
+      *Proton*|*proton*) ok "IP de sortie bien chez Proton [$org]" ;;
+      "") warn "Propriétaire de l'IP non identifiable (ipinfo.io injoignable ?)" ;;
+      *) fail "IP de sortie = $org — CE N'EST NI Windscribe NI Proton (VPN mal routé)"
+         return 1 ;;
+    esac
+  elif rt_cli_tunnel_connected; then
+    fail "windscribe-cli annonce Connecté mais AUCUN tunnel actif (faux état CLI connu)"
+    warn "Reconnexion propre : windscribe-cli disconnect && windscribe-cli connect"
+    warn "(les scripts refuseront de tourner sans VPN, sauf RT_ALLOW_DIRECT=1)"
   else
     warn "VPN coupé — connecte-toi toi-même: windscribe-cli connect"
     warn "(les scripts refuseront de tourner sans VPN, sauf RT_ALLOW_DIRECT=1)"
@@ -220,6 +238,85 @@ launch_opencode() {
   exec "$launcher"
 }
 
+# --- verify-vpn : contrôle egress VPN complet (avant tout /engage internet) ---
+verify_vpn() {
+  # shellcheck source=/dev/null
+  . "$REDTEAM_DIR/scripts/lib/vpn_state.sh"
+  echo -e "\n${BOLD}▸ Vérification egress VPN${NC}"
+  local rc=0 ip org
+  # shellcheck source=/dev/null
+  . "$REDTEAM_DIR/scripts/lib/vpn_state.sh"
+  if rt_wg_manual_up 2>/dev/null; then
+    ok "tunnel WireGuard manuel actif (wg-quick, handshake récent)"
+  elif rt_vpn_up; then
+    ok "tunnel VPN réel détecté (état CLI + iface tun/wg/xfrm)"
+  else
+    fail "pas de tunnel VPN réel — voir détail: $0 start (check VPN) ou windscribe-cli status"
+    rc=1
+  fi
+  ip=$(rt_exit_ip); org=$(rt_exit_ip_org)
+  info "IPv4 de sortie: ${ip:-injoignable} ${org:+[$org]}"
+  # Proprietaire de l'IP : les IP des serveurs GRATUITS sont souvent annoncees
+  # sous l'AS du datacenter (WorldStream, M247, Datacamp...) et non « Proton ».
+  # Dans la bulle reseau isolee (pentest-vpn), l'isolation est structurelle :
+  # wg0 est l'unique route par defaut. On prouve donc l'absence de fuite en
+  # comparant l'IP de sortie a l'IP directe de l'hote.
+  local bubble_ok=0 host_ip=""
+  if rt_in_bubble; then
+    host_ip="$(rt_bubble_host_ip)"
+    if [ -n "$ip" ] && [ -n "$host_ip" ] && [ "$ip" != "$host_ip" ]; then
+      bubble_ok=1
+    fi
+  fi
+  case "$org" in
+      *Windscribe*|*windscribe*) ok "sortie IPv4 appartient à Windscribe" ;;
+      *Proton*|*proton*) ok "sortie IPv4 appartient à Proton" ;;
+      "") [ "$rc" -eq 0 ] && warn "propriétaire de l'IP non identifiable (ipinfo.io injoignable ?)" ;;
+      *)
+        if [ "$bubble_ok" -eq 1 ]; then
+          ok "bulle isolée : sortie ${ip} [$org] ≠ IP directe hôte (${host_ip}) — aucune fuite possible"
+        else
+          fail "sortie IPv4 = $org — ni Windscribe ni Proton, trafic EN CLAIR"; rc=1
+        fi ;;
+    esac
+  if rt_ipv6_leak; then
+    fail "FUITE IPv6 : $(rt_exit_ip6) sort par une iface physique (désactive IPv6 ou protection Windscribe)"
+    rc=1
+  else
+    if [ -n "$(rt_exit_ip6)" ]; then
+      ok "IPv6 de sortie hors iface physique : $(rt_exit_ip6)"
+    else
+      info "pas d'IPv6 publique — pas de fuite IPv6 possible"
+    fi
+  fi
+  if rt_in_bubble; then
+    # Dans la bulle, le kill-switch est structurel : wg0 est la seule route par
+    # defaut, il n'existe aucune sortie en clair possible.
+    ok "kill-switch structurel : la bulle n'a qu'une route par défaut (wg0)"
+  else
+    local ws_conf="$HOME/.config/Windscribe/windscribe_cli.conf" fw_mode
+    fw_mode=$(grep -E '^FirewallMode=' "$ws_conf" 2>/dev/null | cut -d= -f2 || true)
+    case "$fw_mode" in
+      Always) ok "kill-switch armé en permanence (FirewallMode=Always)" ;;
+      *) warn "kill-switch FirewallMode=${fw_mode:-absent} — Always recommandé : windscribe-cli firewall on" ;;
+    esac
+  fi
+  if [ "${RT_USE_TOR:-0}" = "1" ]; then
+    if rt_tor_up; then
+      ok "mode Tor : proxy Tor disponible"
+    else
+      fail "RT_USE_TOR=1 mais aucun proxy Tor (gateway docker ou 9050)"
+      rc=1
+    fi
+  fi
+  if [ "$rc" -eq 0 ]; then
+    ok "egress prêt pour cibles internet"
+  else
+    fail "egress NON sûr — ne pas lancer d'engagement internet"
+  fi
+  return "$rc"
+}
+
 # --- stop --------------------------------------------------------------------
 stop_stack() {
   echo -e "\n${BOLD}▸ Arrêt de la stack RedTeam${NC}"
@@ -272,10 +369,26 @@ main() {
       banner
       exec bash "$REDTEAM_DIR/scripts/verify-tor.sh"
       ;;
+    verify-vpn)
+      banner
+      verify_vpn
+      ;;
     start|*)
       banner
       check_prereqs
-      check_host_vpn
+      if ! check_host_vpn; then
+        fail "egress VPN invalide (IP de sortie non-Windscribe) — arrêt."
+        fail "Diagnostic : $0 verify-vpn"
+        exit 1
+      fi
+      # Cibles internet : pas de VPN réel => pas de lancement (fail-closed).
+      # RT_ALLOW_DIRECT=1 force le passage en connaissance de cause (lab local).
+      if command -v rt_vpn_up >/dev/null 2>&1 && ! rt_vpn_up && [ "${RT_ALLOW_DIRECT:-0}" != "1" ]; then
+        fail "VPN hôte absent — refus de lancer la stack pour cibles internet."
+        fail "Connecte le VPN (windscribe-cli connect), vérifie: $0 verify-vpn"
+        fail "Lab local uniquement ? relance avec RT_ALLOW_DIRECT=1"
+        exit 1
+      fi
       if [ "${RT_USE_TOR:-0}" = "1" ]; then
         start_tor_gateway
       else
