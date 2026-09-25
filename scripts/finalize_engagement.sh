@@ -359,6 +359,13 @@ fi
 
 rm -f "$ENG_DIR"/tmp-*.md
 
+# Capitalisation: génère un playbook réutilisable depuis cet engagement terminé
+# (best-effort — ne bloque jamais la finalisation).
+if [[ -x "$SCRIPT_DIR/generate_playbook.sh" && -f "$ENG_DIR/findings.md" ]]; then
+    bash "$SCRIPT_DIR/generate_playbook.sh" "$ENG_DIR" >/dev/null 2>&1 \
+        || echo "[finalize] warning: playbook generation failed (non-blocking)" >&2
+fi
+
 if [[ -f "$DB_FILE" ]]; then
     printf '.timeout 5000\nPRAGMA wal_checkpoint(TRUNCATE);\n' | sqlite3 "$DB_FILE" >/dev/null
     rm -f "$DB_FILE-wal" "$DB_FILE-shm"

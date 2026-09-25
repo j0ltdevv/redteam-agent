@@ -160,6 +160,22 @@ chmod +x "$DIR/tools/rtcurl"
 echo "$DIR"
 ```
 
+### Step 2.5: Load Relevant Playbook (capitalisation)
+
+Check for auto-generated playbooks from previous engagements and load the most relevant one:
+
+```bash
+ls -t .opencode/playbooks/generated/*.md 2>/dev/null | head -5
+```
+
+If at least one generated playbook exists:
+1. Read the frontmatter (triggers, target, finding_count) of the 2 most recent ones.
+2. If a playbook matches the current target type (webapp/SPA/API — check the `triggers` field), read it fully and announce: "Playbook chargé: <name> (<N> findings capitalisés)".
+3. Apply it as prior knowledge: reuse validated techniques (its "Techniques qui ont validé" table) early in recon/analysis, and explicitly avoid its documented pitfalls ("Pièges rencontrés").
+4. Static playbooks in `.opencode/playbooks/` (webapp.md, api.md...) still apply on top — generated playbooks add target-specific experience, they do not replace phase structure.
+
+If none exists or none matches, continue silently — do not ask the user.
+
 Replace all `<placeholder>` comments above with actual parsed values from Step 1.
 The key point: `$DATE`, `$START_TIME` etc. MUST be shell variables that expand at write time.
 Keep each heredoc as a standalone command:
