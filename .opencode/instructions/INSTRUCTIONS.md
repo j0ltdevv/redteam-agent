@@ -61,6 +61,12 @@ operator believes, or from "the wrappers did not complain".
   prevent.
 - "It was protected a moment ago" is not evidence: re-run the check.
 - The same applies to `scope.json.opsec_mode`: read the file, never assume it.
+- The machine-checkable version of this rule is `scripts/opsec-check.sh`: it
+  compares the **measured** exit IP with the machine's direct IP and exits non-zero
+  on `CLAIR` (leak) or `INCONNU` (unprovable). The wrappers — `egress-wrap.sh`,
+  `tor-socks5-wrap.sh`, `tor-wrap.sh` — already refuse on that verdict, so a tool
+  launched through them cannot reach the internet in the clear. Quote their
+  output when you report; do not re-derive it from context.
 
 ## OPSEC default (replaces "assume normal")
 

@@ -88,11 +88,15 @@ rt_wg_probe() {
 }
 
 # --- Bulle reseau isolee "pentest" (pentest-vpn) -----------------------------
-# rt_in_bubble — vrai si le processus tourne DANS la bulle reseau isolee.
+# rt_in_bubble — vrai si CE processus tourne dans la bulle.
+# `ip netns identify $$` compare le netns du processus a un netns nomme.
+# NE PAS utiliser `ip netns list | grep pentest` : ca liste les netns existants
+# sur la machine et renvoyait "bulle" meme depuis le PC hote des que la bulle
+# etait montee (corrige le 2026-09-25).
 rt_in_bubble() {
     [ "${RT_BUBBLE:-0}" = "1" ] && return 0
     command -v ip >/dev/null 2>&1 || return 1
-    ip netns list 2>/dev/null | grep -qw pentest
+    ip netns identify $$ 2>/dev/null | grep -qx pentest
 }
 
 # rt_bubble_host_ip — IP publique directe de l'hote, relevee par `pentest-vpn up`.

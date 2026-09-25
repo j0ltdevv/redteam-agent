@@ -16,6 +16,8 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=/dev/null
 . "$SCRIPT_DIR/lib/vpn_state.sh"
+# shellcheck source=/dev/null
+. "$SCRIPT_DIR/lib/opsec_guard.sh"
 
 if [ "$#" -eq 0 ]; then
     echo "[egress] ERROR: usage: tor-wrap.sh <command> [args…]" >&2
@@ -37,6 +39,8 @@ if [ "$(rt_egress_mode)" = "tor" ]; then
 fi
 
 if rt_vpn_up; then
+    # OPSEC fail-closed : refuse si le trafic partirait en clair (mesure IP).
+    rt_og_require_isolated || exit 1
     # Pas de proxy à injecter : la route par défaut passe déjà par le tunnel VPN.
     # On s'assure juste de ne PAS laisser traîner un proxy Tor mort.
     unset ALL_PROXY HTTP_PROXY HTTPS_PROXY all_proxy http_proxy https_proxy || true

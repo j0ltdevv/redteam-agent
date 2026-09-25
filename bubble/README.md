@@ -185,6 +185,42 @@ aussi remplace par sa preuve structurelle (une seule route par defaut : `wg0`).
 | Résilience | rebond `wg0 down` puis `pentest-shell` | ✅ auto-réparation (`default dev wg0` restauré, IP Proton) |
 | PC | route par défaut / IP / DNS | ✅ `wlan0` / `88.188.195.156` / stub — jamais modifiés |
 
+## Couche OPSEC — l'isolation est prouvee, pas promise
+
+La bulle rend le trafic du pentest isole, mais **rien n'obligeait** l'agent a y
+etre : le contrat « VPN-first » ne vivait que dans le prompt. Ajout du 2026-09-25 :
+
+```bash
+scripts/opsec-check.sh      # verdict d'isolation par MESURE
+```
+
+Le principe : on ne demande plus « le tunnel est-il monte ? » (reponse VRAIE meme
+quand rien ne route, cf. le bug `SETUP_WG.md`) mais **« par ou sort reellement le
+trafic ? »**, en comparant l'IP de sortie vue par le processus a l'IP directe de
+la machine.
+
+| Verdict | Signification | Action |
+|---|---|---|
+| `bulle` | namespace `pentest` : trafic 100 % tunnel | OK |
+| `tunnel` | hors bulle, mais IP de sortie != IP directe | OK |
+| `CLAIR` | IP de sortie == IP directe | **REFUS** (exit 1) |
+| `INCONNU` | non mesurable | **REFUS** (fail-closed) |
+
+Les 3 wrappers (`egress-wrap.sh`, `tor-socks5-wrap.sh`, `tor-wrap.sh`) refusent
+maintenant sur ce verdict : **un outil lancé par eux ne peut pas sortir en clair.**
+
+Verifie le 2026-09-25 :
+```
+PC hote    : VERDICT CLAIR  -> exit 1, les 3 wrappers refusent
+dans la bulle: VERDICT bulle -> exit 0, curl sort en 89.39.107.194
+```
+
+**Ce que je n'ai PAS fait, volontairement** : un kill-switch nftables global sur
+l'hote. Il bloquerait aussi ton navigateur, ton IDE et cette session — c'est
+exactement le symptome « on me coupe » qu'on a passe des heures a supprimer. Si tu
+le veux un jour (fenetre d'engagement courte), il se branche sur `pentest-vpn up`
+avec un TTL de desarmement automatique.
+
 ### Limites constatees
 
 1. **`nmap` exige `geteuid()==0`** : ni `setcap`, ni les namespaces ne suffisent

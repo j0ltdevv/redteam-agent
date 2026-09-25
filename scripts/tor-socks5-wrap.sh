@@ -15,6 +15,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=/dev/null
 . "$SCRIPT_DIR/lib/vpn_state.sh"
+# shellcheck source=/dev/null
+. "$SCRIPT_DIR/lib/opsec_guard.sh"
 
 if [ "$#" -eq 0 ]; then
     echo "[egress] ERROR: usage: tor-socks5-wrap.sh <command> [args...]" >&2
@@ -36,6 +38,8 @@ if [ "$(rt_egress_mode)" = "tor" ]; then
 fi
 
 if rt_vpn_up; then
+    # OPSEC fail-closed : refuse si le trafic partirait en clair (mesure IP).
+    rt_og_require_isolated || exit 1
     unset ALL_PROXY HTTP_PROXY HTTPS_PROXY all_proxy http_proxy https_proxy || true
     export NO_PROXY="localhost,127.0.0.1,::1"
     export no_proxy="localhost,127.0.0.1,::1"

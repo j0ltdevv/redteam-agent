@@ -19,6 +19,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=/dev/null
 . "$SCRIPT_DIR/lib/vpn_state.sh"
+# shellcheck source=/dev/null
+. "$SCRIPT_DIR/lib/opsec_guard.sh"
 
 PROXYCHAINS_BIN="${PROXYCHAINS_BIN:-/usr/bin/proxychains4}"
 PROXYCHAINS_CONF="${PROXYCHAINS_CONF:-$SCRIPT_DIR/proxychains-redteam.conf}"
@@ -38,6 +40,8 @@ if [ "$(rt_egress_mode)" = "tor" ]; then
 fi
 
 if rt_vpn_up; then
+    # OPSEC fail-closed : refuse si le trafic partirait en clair (mesure IP).
+    rt_og_require_isolated || exit 1
     echo "[egress] Routing through host VPN (kill-switch ON expected)" >&2
     exec "$@"
 fi
