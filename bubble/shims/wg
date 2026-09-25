@@ -1,0 +1,10 @@
+#!/bin/sh
+# Shim utilise UNIQUEMENT dans la bulle pentest (voir /usr/local/lib/pentest-shims
+# et le PATH pose par pentest-shell).
+#
+# Pourquoi : le namespace est cree par root, donc un utilisateur normal ne peut
+# pas interroger l'interface WireGuard (`wg show` -> "Operation not permitted").
+# Or le contrat d'egress du redteam-agent verifie precisement le handshake via
+# `wg show all latest-handshakes`. Ce shim preserve le namespace du processus
+# appelant (sudo ne change pas de netns), donc la commande voit bien wg0.
+exec sudo -n /usr/bin/wg "$@"

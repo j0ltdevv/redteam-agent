@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# =============================================================================
+#  redteam-bubble — lance le redteam-agent DANS la bulle VPN
+#
+#  Tout ce que le framework execute (MCP, outils en mode local) herite de la
+#  bulle, donc sort par le VPN. Le PC reste intact.
+#
+#  Docker n'est pas utilisable dans la bulle : les conteneurs sont crees par le
+#  daemon, qui vit dans le namespace de l'hote. D'ou REDTEAM_RUNTIME_MODE=local
+#  (les binaires katana/nuclei/httpx/subfinder/nmap/ffuf sont installes).
+#
+#  USAGE
+#    redteam-bubble verify-vpn        # controle d'egress du framework
+#    redteam-bubble start             # lance la stack
+#    redteam-bubble shell             # shell interactif dans ~/redteam-agent
+#    redteam-bubble <commande...>     # n'importe quelle commande du framework
+# =============================================================================
+set -u
+
+REPO="${REDTEAM_DIR:-$HOME/redteam-agent}"
+SHELL_BIN="/usr/local/bin/pentest-shell"
+
+[ -d "$REPO" ] || { echo "depot introuvable : $REPO"; exit 1; }
+
+if [ "$#" -eq 0 ]; then
+  set -- shell
+fi
+
+if [ "$1" = "shell" ]; then
+  exec "$SHELL_BIN" bash -c 'cd "$1" && exec bash -i' _ "$REPO"
+fi
+
+exec "$SHELL_BIN" bash -c '
+  cd "$1" || exit 1
+  shift
+  export REDTEAM_RUNTIME_MODE="${REDTEAM_RUNTIME_MODE:-local}"
+  export RT_BUBBLE=1
+  exec ./start-redteam.sh "$@"
+' _ "$REPO" "$@"
