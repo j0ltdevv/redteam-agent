@@ -24,7 +24,8 @@ Agent de sécurité offensif autonome, piloté par mission en langage naturel. I
 ## Démarrage
 
 1. Configurer le provider d'agent (opencode) et le runtime sandboxé.
-2. Baseline d'outils : `scripts/verify-all.sh` vérifie l'infra et le harnais.
+2. Contrôles : `scripts/opsec-check.sh` (egress OPSEC, fail-closed) et
+   `scripts/check_benchmark.sh <engagement_dir>` (intégrité findings + coverage surfaces).
 3. Lancer une mission dans une session cage : `engage` (ou `autoengage`) avec la cible et le scope.
 
 ## Limites honnêtes
