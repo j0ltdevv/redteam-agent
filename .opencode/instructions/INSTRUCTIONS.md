@@ -89,6 +89,29 @@ X", "scanne les ports"), EXECUTE it fully — acknowledging or planning it is no
 - If the task cannot be completed, report the exact blocker instead of silently doing
   something else.
 
+## Mémoire persistante (Basic Memory)
+
+La mémoire longue est partagée avec la session normale : vault Obsidian
+`~/Téléchargements/Tweeter repo/Memory/`, projet Basic Memory « memory », MCP
+`basic-memory` (remote, `http://127.0.0.1:27842/mcp`).
+
+- **Début de session** : `bash ./scripts/memory_session_start.sh` (équivalent de
+  `bm hook session-start`). Charge le brief mémoire avant de répondre à « où on
+  en est / qu'est-ce qu'on avait décidé ». Ne jamais supposer une mémoire vide.
+- **Fin d'engagement** : `bash ./scripts/memory_session_end.sh <engagement_dir>`.
+  Archive les leçons **méthodologiques** (techniques qui ont validé, pièges
+  rencontrés, faux positifs récurrents, temps par phase) via `write_note`, puis
+  recharge le playbook généré.
+- **Règle OPSEC — non négociable** : la mémoire longue ne contient **jamais**
+  d'identité de cible réelle (IP, hostname, domaine, token, cookie, payload
+  verbatim). On écrit la **méthode**, pas la cible : « le contournement de
+  filtre par octet nul a marché sur un service FTP ancien » oui ;
+  « 10.0.3.7/ftp Accessible=yes » non. Les cibles restent dans
+  `engagements/<id>/` (local, gitignoré), la mémoire ne porte que le
+  transposable.
+- Les playbooks locaux (`.opencode/playbooks/generated/`) restent la source de
+  vérité par cible ; Basic Memory est la couche **inter-engagements**.
+
 ## OPSEC Modes
 
 The operator sets a run-wide OPSEC posture with a direct order. It is stored in

@@ -10,6 +10,7 @@ source "$SCRIPT_DIR/lib/placeholders.sh"
 source "$SCRIPT_DIR/lib/source_queue_filter.sh"
 source "$SCRIPT_DIR/lib/engagement_lock.sh"
 source "$SCRIPT_DIR/lib/evidence_gate.sh"
+source "$SCRIPT_DIR/lib/roe_gate.sh" 2>/dev/null || true
 
 # Emit a `case_done` runtime event per id so the orchestrator's cases /
 # dispatches mirror tables stay populated under SERIALIZED dispatch.

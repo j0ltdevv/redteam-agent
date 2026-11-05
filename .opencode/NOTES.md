@@ -46,7 +46,7 @@
 - opencode-notifier : candidat push checkpoint — voir T12.
 
 ## T02 — interactsh réparé
-- Binaire reconstruit : GOBIN=/home/j0wlt/redteam-agent/.tools/interactsh go install .../interactsh-client@latest → exit 0, 42 Mo.
+- Binaire reconstruit : GOBIN=/home/jolt/redteam-agent/.tools/interactsh go install .../interactsh-client@latest → exit 0, 42 Mo.
 - Symlink réparé : ~/.local/bin/interactsh-client → .tools/interactsh/interactsh-client.
 - Version : Current Version 1.3.1.
 - .env local : .opencode/.interactsh.env (INTERACTSH_SERVER=oast.pro, LOG_LEVEL=INFO) + gitignore.
@@ -140,7 +140,7 @@ Résultat brut (stdout) :
 → **PAS de `[turn=...]`**, ZÉRO lecture de fichier, ZÉRO tool call offensif, réponse 1 ligne. ✅ F4 validé.
 
 ## FIX-1 — nmap-mcp path (audit fix, 2026-09-22)
-- Constat : opencode.json:155 pointe DÉJÀ `/home/j0wlt/redteam-agent/.tools/nmap-mcp-server/dist/index.js` (correct).
+- Constat : opencode.json:155 pointe DÉJÀ `/home/jolt/redteam-agent/.tools/nmap-mcp-server/dist/index.js` (correct).
 - `ls .tools/nmap-mcp-server/dist/index.js` = présent (5585 o) ; `.tools/nmap-mcp/dist/index.js` = absent ; `.opencode/.tools/...` = absents (le chemin `.opencode/.tools` de la consigne n'existe pas, le bon est `.tools/` racine).
 - Boot stdio : `{"serverInfo":{"name":"nmap-server","version":"0.1.0"}}` + `NMAP server running on stdio`, exit 0.
 - Headless `opencode run --standalone --agent copilot "hey"` : session `ses_f352e1f40ffeUlbRivCHiO8PBO`, texte `[copilot] prêt. En attente de target + scope.`, stderr = 0 erreur MCP.

@@ -75,7 +75,7 @@
 ## [T13] MCP candidats checklist Appsecco — statut DONE
 - Objectif : verdict ×3 (nuclei, pd-tools, nmap) dans NOTES.md
 - Critère d'acceptation : 3 entrées
-- Preuve : NOTES §T13 (KEEP×2 DROP×1) + builds locaux OK + branchement opencode.json (mcp=11, jq JSONC OK) + boot ×2 cwd = JSON-RPC initialize OK, templates=/home/j0wlt/nuclei-templates
+- Preuve : NOTES §T13 (KEEP×2 DROP×1) + builds locaux OK + branchement opencode.json (mcp=11, jq JSONC OK) + boot ×2 cwd = JSON-RPC initialize OK, templates=/mnt/data/home/j0wlt/nuclei-templates
 - Dépend de : []
 
 ## [T14] Non-régression lab — statut DONE

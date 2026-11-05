@@ -34,6 +34,7 @@ WS_LOG="${WS_LOG:-/var/log/windscribe/helper.log}"
 PROTO="stealth"
 CHECK_ONLY=0
 DIAGNOSE=0
+DOWN_ONLY=0
 
 usage() {
     cat <<'USAGE'
@@ -42,6 +43,7 @@ vpn-up.sh — monte le tunnel VPN hôte et VÉRIFIE l'egress avant de te laisser
   ./scripts/vpn-up.sh [protocole]   connecte (stealth par défaut | tcp:443 | wireguard)
   --check        état + IP courante, ne connecte rien (lecture seule)
   --diagnose     DNS, route, pare-feu, protocole, IP (lecture seule)
+  --down         coupe le tunnel ET le daemon Windscribe (retire son pare-feu)
   --help         ce message
 
 Retour : 0 = connecté + egress vérifié ; 1 = non connecté / échec ;
@@ -54,6 +56,7 @@ do
     case "$arg" in
         --check)    CHECK_ONLY=1 ;;
         --diagnose) DIAGNOSE=1 ;;
+        --down)     DOWN_ONLY=1 ;;
         --help|-h)  usage; exit 0 ;;
         -*)         echo "[vpn] flag inconnu: $arg (voir --help)" >&2; exit 2 ;;
         *)          PROTO="$arg" ;;
@@ -135,6 +138,45 @@ diagnose() {
     echo "[vpn]   IP      : $(fetch_egress_ip 2>/dev/null || echo 'NON VÉRIFIÉE')"
 }
 
+# --- Daemon Windscribe : démarrage / arrêt À LA DEMANDE ----------------------
+# Le CLI ne peut rien faire sans le daemon : sans lui il sort
+# « Abandon : l'application n'a pas démarré à temps » (constaté 2026-09-27).
+# Le daemon est laissé DÉSACTIVÉ au boot : sinon son « boot firewall » droppe le
+# port 53 vers 1.1.1.1 / 9.9.9.9 / 149.112.112.112 ET vers la box
+# (192.168.1.254) AVANT que le tunnel soit monté -> panne DNS totale
+# (incident du 2026-09-27 : 5 507 getaddrinfo ETIMEOUT). On le démarre ici.
+ensure_helper() {
+    systemctl is-active --quiet windscribe-helper.service 2>/dev/null && return 0
+    echo "[vpn] démarrage du daemon Windscribe (à la demande)"
+    sudo -n systemctl start windscribe-helper.service 2>/dev/null || true
+    local _i
+    for _i in $(seq 1 10); do
+        systemctl is-active --quiet windscribe-helper.service 2>/dev/null && return 0
+        sleep 1
+    done
+    echo "[vpn] ATTENTION: daemon non actif — le CLI va probablement échouer" >&2
+    return 1
+}
+
+# Arrêter le daemon retire son pare-feu. À faire dès qu'aucun tunnel ne tourne,
+# sinon plus aucune résolution de nom ne passe : fail-closed sans blackout.
+stop_helper() {
+    if systemctl is-active --quiet windscribe-helper.service 2>/dev/null; then
+        echo "[vpn] arrêt du daemon Windscribe (pare-feu Windscribe retiré)"
+        sudo -n systemctl stop windscribe-helper.service 2>/dev/null || true
+    fi
+}
+
+down() {
+    command -v windscribe-cli >/dev/null 2>&1 && windscribe-cli disconnect >/dev/null 2>&1 || true
+    stop_helper
+    echo "[vpn] déconnecté — IP directe: $(fetch_egress_ip 2>/dev/null || echo '?')"
+    echo "[vpn] pare-feu: $(firewall_state)"
+    exit 0
+}
+
+if [ "$DOWN_ONLY" = "1" ]; then down; fi
+
 if rt_vpn_up; then
     if verify_egress; then
         echo "[vpn] déjà connecté — IP de sortie: $EGRESS_IP"
@@ -167,6 +209,8 @@ if ! command -v windscribe-cli >/dev/null 2>&1; then
     exit 1
 fi
 
+ensure_helper
+
 echo "[vpn] connexion en mode '$PROTO' (stealth = TLS 443, survit aux hotspots mobiles)..."
 timeout 90 windscribe-cli connect "$PROTO" >/dev/null 2>&1 || true
 
@@ -195,4 +239,6 @@ done
 
 echo "[vpn] ÉCHEC: tunnel non établi après 45 s — regarde:" >&2
 echo "[vpn]   sudo tail -n 30 $WS_LOG" >&2
+echo "[vpn] fail-closed: daemon arrêté (aucun pare-feu bloquant laissé en place)" >&2
+stop_helper
 exit 1

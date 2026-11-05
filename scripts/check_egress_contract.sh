@@ -169,8 +169,17 @@ else
 fi
 rm -rf "$STUB2"
 
-# --- 7. opencode.json : aucun proxy Tor en dur dans les commandes MCP -------
-if python3 - "$REPO_DIR/.opencode/opencode.json" <<'EOPY'
+# --- 7. opencode.jsonc : aucun proxy Tor en dur dans les commandes MCP -------
+# P1 #1 (2026-09-27) : fichier reel = .opencode/opencode.jsonc (JSONC). Test jsonc
+# en priorite, fallback json pour retro-compat, strip // commentaires JSONC.
+_OE_CFG=""
+for _cand in "$REPO_DIR/.opencode/opencode.jsonc" "$REPO_DIR/.opencode/opencode.json"; do
+    [ -f "$_cand" ] && _OE_CFG="$_cand" && break
+done
+if [ -z "$_OE_CFG" ]; then
+    bad "opencode config missing (.opencode/opencode.jsonc not found)"
+else
+if python3 - "$_OE_CFG" <<'EOPY'
 import json
 import re
 import sys
@@ -188,10 +197,12 @@ if offenders:
     sys.exit(1)
 EOPY
 then
-    ok "opencode.json MCP commands have no hardcoded Tor proxy"
+    ok "opencode.jsonc MCP commands have no hardcoded Tor proxy ($_OE_CFG)"
 else
-    bad "opencode.json still hardcodes a Tor proxy in an MCP command"
+    bad "opencode.jsonc still hardcodes a Tor proxy in an MCP command ($_OE_CFG)"
 fi
+fi
+unset _OE_CFG _cand
 
 # --- 8. lanceur redteam + raccourci niri ------------------------------------
 if [ -x "$HOME/.local/bin/rt-term" ]

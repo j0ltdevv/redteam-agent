@@ -25,12 +25,12 @@ UPSTREAM_SCHEME = UPSTREAM.scheme or "http"
 USERNAME = os.environ.get("OPENCODE_SERVER_USERNAME", "opencode")
 PASSWORD = os.environ.get("OPENCODE_SERVER_PASSWORD", "")
 if not PASSWORD:
-    state_path = Path("/home/j0wlt/.config/opencode-redteam/state/opencode/service.json")
+    state_path = Path("/mnt/data/home/j0wlt/.config/opencode-redteam/state/opencode/service.json")
     if state_path.exists():
         PASSWORD = json.loads(state_path.read_text()).get("password", "")
 
 AUTH = "Basic " + base64.b64encode(f"{USERNAME}:{PASSWORD}".encode()).decode()
-DEFAULT_PROJECT_DIR = os.environ.get("OPENCODE_PROJECT_DIR", "/home/j0wlt/redteam-agent")
+DEFAULT_PROJECT_DIR = os.environ.get("OPENCODE_PROJECT_DIR", "/home/jolt/redteam-agent")
 SESSION_STATUS: dict[str, dict[str, str]] = {}
 SESSION_DIRECTORY: dict[str, str] = {}
 HOP_BY_HOP = {

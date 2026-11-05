@@ -19,6 +19,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=/dev/null
 . "$SCRIPT_DIR/lib/vpn_state.sh"
+# P1 #2 (2026-09-27) : ROE centralise — tous les wrappers sourcent roe_gate
+# shellcheck source=/dev/null
+. "$SCRIPT_DIR/lib/roe_gate.sh" 2>/dev/null || true
 # shellcheck source=/dev/null
 . "$SCRIPT_DIR/lib/opsec_guard.sh"
 
